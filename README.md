@@ -1,3 +1,4 @@
+<img width="1024" height="1024" alt="fjora-logo" src="https://github.com/user-attachments/assets/a0a500ce-8858-4bfd-a29c-99dc5b5cea86" />
 # Fjora: A Third-Party Jellyfin Player
 
 Fjora is an Android client for Jellyfin focused on movie and TV playback.
