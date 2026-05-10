@@ -39,7 +39,7 @@ Expect bugs and Bug reports, feedback, and contributions are welcome.
 
 ## Known limitations
 
-- Chromecast and remote playback are not implemented.
+- Chromecast is not implemented.
 - Music libraries are not a target for this app and will not be added.
 - Transcoded downloads can be unreliable and slow
 - Downloaded files show detected local container format and size. The bitrate
@@ -52,10 +52,11 @@ Expect bugs and Bug reports, feedback, and contributions are welcome.
   stream or transcoding.
 - First install and loading can be slow due to caching, but becomes smooth after a few minutes.
 - Not tested on tablets.
+- Downloads dont download external subtitles.
 
 ## Upcoming work
 
-- Chromecast and google play store application
+- Chromecast and google play store application.
 - Additional tablet and TV layout polish.
 
 ## Android requirements
