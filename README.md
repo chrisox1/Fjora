@@ -11,7 +11,7 @@ Current release: `v0.1.0 beta`
 ## Status
 
 This is a hobby project which i have made in my free time, with ai assistance and has only been tested on my google Pixel 8a.
-Expect bugs and Bug reports, feedback, and contributions are welcome.
+Expect bugs so bug reports, feedback, and contributions are welcome.
 
 ## Features
 
