@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Custom PlayerView layout matching Media3's expected view IDs.
+
+  The SubtitleView intentionally lives as a sibling of the video content
+  frame, not inside it. That keeps subtitles inside the visible PlayerView
+  area even when the video is using Fill or Zoom resize modes. We do not add
+  the previous large bottom offset here; subtitle placement is left close to
+  Media3's standard area.
+-->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <androidx.media3.ui.AspectRatioFrameLayout
+        android:id="@id/exo_content_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center">
+
+        <View
+            android:id="@id/exo_shutter"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/black" />
+
+        <ImageView
+            android:id="@id/exo_artwork"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitXY" />
+
+    </androidx.media3.ui.AspectRatioFrameLayout>
+
+    <androidx.media3.ui.SubtitleView
+        android:id="@id/exo_subtitles"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingBottom="12dp" />
+
+    <ProgressBar
+        android:id="@id/exo_buffering"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center" />
+
+    <TextView
+        android:id="@id/exo_error_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="#AA000000"
+        android:padding="16dp"
+        android:textColor="@android:color/white"
+        android:textSize="14sp" />
+
+    <FrameLayout
+        android:id="@id/exo_ad_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <FrameLayout
+        android:id="@id/exo_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <View
+        android:id="@id/exo_controller_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</merge>

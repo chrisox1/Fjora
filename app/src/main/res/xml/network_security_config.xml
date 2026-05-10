@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Jellyfin is commonly self-hosted on LAN HTTP, for example
+         http://192.168.1.10:8096. Keep cleartext enabled so those servers
+         work without forcing users to deploy TLS first. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

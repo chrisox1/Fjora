@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!--
+        Declare the app's external-files dir as shareable. This is where
+        downloads land via getExternalFilesDir(DIRECTORY_MOVIES). The path
+        type "external-files-path" exposes the entire app-private external
+        storage tree under content:// URIs (with grantUriPermissions=true
+        on the provider, callers can read these temporarily).
+    -->
+    <external-files-path
+        name="downloads"
+        path="." />
+</paths>

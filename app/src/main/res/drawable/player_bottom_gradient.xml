@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gradient overlay for the player's bottom controls. Fully transparent at the
+  top edge, fading to ~80% opaque black at the very bottom. This blends the
+  controls into the video instead of plopping a solid grey rectangle on top.
+
+  Used by PlayerScreen to override PlayerView's default exo_controls_background.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#00000000"
+        android:centerColor="#80000000"
+        android:endColor="#CC000000"
+        android:angle="270" />
+</shape>

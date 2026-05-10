@@ -1,0 +1,79 @@
+name: Build Fjora APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Install Android API 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Generate Gradle wrapper if missing
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.7
+          fi
+          chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build release artifacts
+        env:
+          FJORA_RELEASE_KEYSTORE_BASE64: ${{ secrets.FJORA_RELEASE_KEYSTORE_BASE64 }}
+          FJORA_RELEASE_STORE_PASSWORD: ${{ secrets.FJORA_RELEASE_STORE_PASSWORD }}
+          FJORA_RELEASE_KEY_ALIAS: ${{ secrets.FJORA_RELEASE_KEY_ALIAS }}
+          FJORA_RELEASE_KEY_PASSWORD: ${{ secrets.FJORA_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$FJORA_RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$FJORA_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fjora-release.jks"
+            export FJORA_RELEASE_STORE_FILE="$RUNNER_TEMP/fjora-release.jks"
+          else
+            unset FJORA_RELEASE_STORE_FILE
+            unset FJORA_RELEASE_STORE_PASSWORD
+            unset FJORA_RELEASE_KEY_ALIAS
+            unset FJORA_RELEASE_KEY_PASSWORD
+          fi
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: fjora-v0.1.0-beta-debug-apks
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload release APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: fjora-v0.1.0-beta-release-apks
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: fjora-v0.1.0-beta-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

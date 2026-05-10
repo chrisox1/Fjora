@@ -1,0 +1,30 @@
+# Gradle / Android build outputs
+/build/
+**/build/
+.gradle/
+local.properties
+keystore.properties
+release.properties
+fjora-keystore-base64.txt
+*.jks
+*.keystore
+*.iml
+.idea/
+captures/
+.cxx/
+
+# IDE artifacts
+.vscode/
+*.swp
+
+# Claude Code local files (per-machine, not for the repo)
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.claude/
+
+.claude/
