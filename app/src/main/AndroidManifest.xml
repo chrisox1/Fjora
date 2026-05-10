@@ -29,10 +29,6 @@
             </intent-filter>
         </activity>
 
-        <!-- FileProvider for sharing downloaded files with external apps
-             (VLC, MX Player, etc). Required because file:// URIs can't be
-             sent across app boundaries on Android 7+; we need content://
-             URIs that receiving apps can access via temporary permissions. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

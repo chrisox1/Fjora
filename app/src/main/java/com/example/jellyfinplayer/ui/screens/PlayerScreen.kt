@@ -84,12 +84,6 @@ private enum class FillMode(val label: String) {
     ZOOM("Zoom")
 }
 
-/**
- * Tag we attach to our own sideloaded subtitle Format.id so we can find it
- * later in the player's track list. Without this, an MKV with embedded text
- * tracks would have multiple text groups and we couldn't reliably tell which
- * one is OURS to override-select.
- */
 private const val SIDELOAD_SUBTITLE_ID = "jellyfin-sideload-subtitle"
 
 @OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
@@ -101,13 +95,6 @@ fun PlayerScreen(
     onBack: () -> Unit,
     nextEpisode: MediaItem? = null,
     onPlayNext: ((MediaItem) -> Unit)? = null,
-    /**
-     * Local file path for offline playback. When non-null, the player
-     * skips the entire server-side resolution pipeline (no PlaybackInfo
-     * call, no transcode negotiation, no progress reporting) and plays
-     * the file directly from disk. The item parameter still provides
-     * metadata for the top-of-screen title display.
-     */
     localFilePath: String? = null
 ) {
     val context = LocalContext.current
@@ -117,25 +104,7 @@ fun PlayerScreen(
         context.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
     }
 
-    // Direct ExoPlayer — no MediaSessionService, no MediaController IPC.
-    // Sideloaded subtitle configurations are handled by the same instance
-    // that reads the MediaItem, so they actually reach DefaultMediaSourceFactory
-    // and the resulting MergingMediaSource. With the IPC controller they were
-    // being silently stripped during round-tripping.
     val player = remember {
-        // Buffer config — bigger than ExoPlayer's defaults for smoother
-        // streaming, but bounded so we don't accumulate enormous in-memory
-        // buffers on long videos.
-        //   minBufferMs = 50s    — minimum target buffer (default 50s)
-        //   maxBufferMs = 300s   — buffer up to 5 minutes ahead. 600s caused
-        //                          GC pauses on 25 Mbps remuxes (~1.9 GB
-        //                          worth of bytes); 300s is plenty for
-        //                          typical Wi-Fi stalls and keeps memory
-        //                          pressure manageable.
-        //   bufferForPlaybackMs = 2.5s — responsive on tap-to-play
-        //   bufferForPlaybackAfterRebufferMs = 5s — after a stall, wait for
-        //                                           5s of buffer to avoid
-        //                                           immediate re-stall
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs = */ 50_000,
@@ -143,34 +112,15 @@ fun PlayerScreen(
                 /* bufferForPlaybackMs = */ 2_500,
                 /* bufferForPlaybackAfterRebufferMs = */ 5_000
             )
-            // Cap target buffer bytes so high-bitrate sources don't push
-            // memory into territory that triggers long GC pauses (visible
-            // as playback hiccups). 96 MB ≈ 30 seconds of 25 Mbps content,
-            // which is enough headroom; the rest of the buffer falls back
-            // to disk-backed allocation.
             .setTargetBufferBytes(96 * 1024 * 1024)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        // HTTP data source with longer connect/read timeouts than ExoPlayer's
-        // 8s defaults. On flaky Wi-Fi or with a busy server, the default
-        // timeouts can fire mid-buffer-fill and produce visible stutter as
-        // the player rebuffers from scratch. 30s is a generous floor that
-        // tolerates typical hiccups without holding state forever on a
-        // genuinely-dead connection.
         val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(30_000)
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent("Fjora/0.1.0 (Android)")
-        // Wrap the HTTP factory in a DefaultDataSource. This lets the player
-        // handle BOTH:
-        //   - http(s):// URIs (server streaming, transcoded HLS) — go through
-        //     httpDataSourceFactory above
-        //   - file:// URIs (downloaded files in app-private storage) — go
-        //     through FileDataSource transparently
-        // Without this wrapper, attempting to play a downloaded file failed
-        // because HttpDataSource doesn't understand file:// scheme.
         val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
             context,
             httpDataSourceFactory
@@ -921,8 +871,6 @@ fun PlayerScreen(
             }
         }
 
-        // Transparent overlay — tapping toggles chrome visibility.
-        // When locked, any tap just reveals the lock button in the top bar.
         if (!inPip) {
             Box(
                 Modifier
@@ -938,7 +886,6 @@ fun PlayerScreen(
             )
         }
 
-        // ── Top bar ──────────────────────────────────────────────────────────
         AnimatedVisibility(
             visible = chromeVisible && !inPip,
             enter = fadeIn(),
@@ -1029,9 +976,6 @@ fun PlayerScreen(
             }
         }
 
-        // ── Center transport controls ─────────────────────────────────────────
-        // Hidden during loading (no first frame yet, or buffering) so the user
-        // sees only the spinner — no stale Pause icon flash.
         val exoLoading = !firstFrameRendered || isBuffering || playWhenFirstFrameRenders
         AnimatedVisibility(
             visible = chromeVisible && !inPip && !controlsLocked && !exoLoading,
@@ -1072,8 +1016,6 @@ fun PlayerScreen(
                         ) { if (player.isPlaying && firstFrameRendered) player.pause() else player.play() },
                     contentAlignment = Alignment.Center
                 ) {
-                    // Only show Pause after the first frame is rendered — before that,
-                    // ExoPlayer can be technically "playing" but no video is visible yet.
                     val showPause = isPlaying && firstFrameRendered
                     Icon(
                         imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -1109,7 +1051,6 @@ fun PlayerScreen(
             }
         }
 
-        // ── Bottom time + seekbar ─────────────────────────────────────────────
         AnimatedVisibility(
             visible = chromeVisible && !inPip && !controlsLocked && !exoLoading,
             enter = fadeIn(),
@@ -1166,11 +1107,6 @@ fun PlayerScreen(
             }
         }
 
-        // Buffering / initial-load spinner. Shown whenever the player is
-        // waiting for data — covers the "paused logo during startup" case
-        // (playWhenFirstFrameRenders) and mid-playback stalls after seeking.
-        // Rendered outside the chrome AnimatedVisibility so it's always
-        // visible even when controls are hidden.
         if (!inPip && (isBuffering || playWhenFirstFrameRenders)) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),

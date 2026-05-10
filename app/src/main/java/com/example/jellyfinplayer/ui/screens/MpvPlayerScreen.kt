@@ -69,22 +69,6 @@ private enum class MpvFillMode(val label: String) {
     ZOOM("Zoom")
 }
 
-/**
- * Compose wrapper around libmpv. Plays a downloaded local file using the
- * bundled mpv engine — used as a fallback when ExoPlayer can't seek a
- * given MKV, or as the user's default player for downloads when the
- * "Use mpv for downloads" setting is on.
- *
- * mpv talks to its own SurfaceView via JNI; we don't share the ExoPlayer
- * pipeline at all. Lifecycle-managed: surface attached on START, detached
- * on STOP, mpv destroyed on screen disposal.
- *
- * Limited UI in this v1 — back button, play/pause, scrub bar, time
- * display. mpv's full feature surface (audio/subtitle switching, decoder
- * selection) is reachable via `MPVLib.command(...)` but not yet wired into
- * a picker UI; that's deliberate scope-cutting since the primary value
- * here is "the file actually plays and seeks."
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MpvPlayerScreen(
@@ -107,19 +91,12 @@ fun MpvPlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
-    // Smooth seek bar state — interpolated between 500ms polls.
     var smoothPositionMs by remember { mutableLongStateOf(0L) }
     var lastPollWallMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
-    // True once loadfile has been issued. Prevents re-issuing loadfile when
-    // the SurfaceView surface is destroyed and recreated (e.g. going home and
-    // returning, or the system briefly reclaiming the surface in PiP).
     var fileLoaded by remember { mutableStateOf(false) }
     var mpvBuffering by remember { mutableStateOf(false) }
-    // True once MPV has finished its initial load + resume-seek + unpause.
-    // Used to hide the play/pause/skip controls during the loading phase
-    // (the user only sees the spinner — Findroid-style). Reset on item change.
     var mpvFirstFrameReady by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
     var controlsLocked by remember { mutableStateOf(false) }
@@ -138,14 +115,9 @@ fun MpvPlayerScreen(
     var showSpeedMenu by remember { mutableStateOf(false) }
     var playbackSpeed by remember { mutableStateOf(1.0f) }
     var externalSubId by remember { mutableStateOf(-1) }
-    // Set before any playNext() call so onRelease and surfaceDestroyed skip
-    // their MPVLib teardown — the new screen will own MPVLib at that point.
     var isNavigatingAway by remember { mutableStateOf(false) }
     var selectedAudioIndex by remember { mutableStateOf<Int?>(null) }
     var selectedSubtitleIndex by remember { mutableStateOf<Int?>(null) }
-    // Custom Compose subtitle renderer state — used for text-based subs (SRT, ASS, VTT)
-    // because the jdtech mpv-android build doesn't include libass so MPV can't render them.
-    // Image-based subs (PGS, DVDSUB) still go through MPV's internal sid selector.
     var subtitleCues by remember { mutableStateOf<List<SubCue>>(emptyList()) }
     var currentSubCue by remember { mutableStateOf<SubCue?>(null) }
     var fillMode by remember { mutableStateOf(MpvFillMode.FIT) }
@@ -153,8 +125,6 @@ fun MpvPlayerScreen(
     val latestResolved by rememberUpdatedState(resolved)
     val latestPositionMs by rememberUpdatedState(positionMs)
 
-    // Existence check — if the file vanished between download and play,
-    // surface a clean error rather than letting mpv fail silently.
     val fileExists = remember(localFilePath) {
         localFilePath == null || File(localFilePath).exists()
     }
@@ -663,7 +633,6 @@ fun MpvPlayerScreen(
                 }
         )
 
-        // ── Top bar ──────────────────────────────────────────────────────────
         AnimatedVisibility(
             visible = chromeVisible,
             enter = fadeIn(),
@@ -741,9 +710,6 @@ fun MpvPlayerScreen(
             }
         }
 
-        // ── Center transport controls ─────────────────────────────────────────
-        // Hidden during the loading phase (before first frame ready or while
-        // buffering) so the user only sees the spinner — no stale Pause icon.
         val mpvLoading = !mpvFirstFrameReady || mpvBuffering ||
             (fileLoaded && durationMs == 0L)
         AnimatedVisibility(
@@ -831,7 +797,6 @@ fun MpvPlayerScreen(
             }
         }
 
-        // ── Bottom time + seekbar ─────────────────────────────────────────────
         AnimatedVisibility(
             visible = chromeVisible && !controlsLocked && !mpvLoading,
             enter = fadeIn(),
@@ -892,9 +857,6 @@ fun MpvPlayerScreen(
             }
         }
 
-        // Buffering spinner — shown when MPV is paused waiting for the
-        // network cache (seeking stall) or when the file is loading
-        // (fileLoaded=true but duration not yet reported).
         val showMpvSpinner = mpvBuffering || (fileLoaded && durationMs == 0L && sourceUrl != null)
         if (showMpvSpinner) {
             CircularProgressIndicator(
@@ -912,18 +874,8 @@ fun MpvPlayerScreen(
             modifier = Modifier.align(Alignment.Center)
         )
 
-        // Custom subtitle overlay — text cues downloaded from Jellyfin and
-        // rendered here because MPV's text subtitle support requires libass
-        // which is not present in the jdtech mpv-android build.
-        // Hide our subtitle overlay entirely in PiP — at PiP-window scale a
-        // 16sp text fills most of the box and looks broken. Subs come back
-        // automatically when the user expands out of PiP.
         val activeCue = currentSubCue
         if (activeCue != null && !inPip) {
-            // Mimic ExoPlayer's default SubtitleView caption style: white text,
-            // semi-transparent black background tight to the text, positioned
-            // near the bottom of the video. Won't be pixel-identical (ExoPlayer
-            // scales fonts to view height) but visually consistent.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

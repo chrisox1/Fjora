@@ -75,9 +75,6 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // Accounts section — each saved account is a row. Active one has
-            // a check on the leading avatar; tap a non-active row to switch;
-            // trash icon opens the delete confirmation sheet.
             SectionLabel("Accounts")
             accounts.forEach { account ->
                 AccountRow(
@@ -87,7 +84,6 @@ fun SettingsScreen(
                     onDelete = { pendingDelete = account }
                 )
             }
-            // "Add account" entry — looks like a row but with a + icon.
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -119,7 +115,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Playback section
             SectionLabel("Playback")
             ClickableRow(
                 label = "Default quality",
@@ -191,8 +186,6 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(32.dp))
 
-            // Destructive: sign out of every account at once. The single-
-            // account "delete this account" lives on each account row above.
             Button(
                 onClick = { showSignOutAllConfirm = true },
                 colors = ButtonDefaults.buttonColors(
@@ -298,13 +291,6 @@ private fun AccountRow(
             .padding(vertical = 12.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar block — fixed-size circle with two layered visuals:
-        //   1. The user's actual Jellyfin profile picture (AsyncImage). On
-        //      404 (most users haven't set one), the fallback slot renders
-        //      a Person icon on a tinted background.
-        //   2. A small Check badge overlaid in the bottom-right when this is
-        //      the active account, so the user can still see at a glance
-        //      which account they're signed in as without losing the avatar.
         Box(
             Modifier.size(44.dp),
             contentAlignment = Alignment.Center
@@ -327,30 +313,17 @@ private fun AccountRow(
                         contentDescription = "${account.userName} profile picture",
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
-                        // Show the Person icon while loading and on error
-                        // (404 = user hasn't set an avatar — common case).
                         error = androidx.compose.ui.graphics.painter.ColorPainter(
                             cs.surfaceVariant
                         )
                     )
-                    // The Person icon is layered UNDER the AsyncImage so it
-                    // shows during load and on error when the image fails.
-                    // We only show it when the AsyncImage hasn't drawn over
-                    // it; the simplest way is to just always render it and
-                    // let the image cover it when present.
                 }
-                // Always render the fallback icon — gets covered by the image
-                // when the image succeeds, visible during load and on 404.
                 Icon(
                     Icons.Default.Person,
                     contentDescription = null,
                     tint = cs.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
-                // Re-render the AsyncImage on top so a successful load covers
-                // the Person icon. (Coil 2.x doesn't cleanly support a
-                // "loading-or-error" composable slot in a single AsyncImage,
-                // so we stack: Person icon first, AsyncImage second.)
                 if (avatarUrl != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(ctx)
@@ -363,8 +336,6 @@ private fun AccountRow(
                     )
                 }
             }
-            // Active-account badge — small primary-tinted check in the
-            // bottom-right corner of the avatar circle.
             if (isActive) {
                 Box(
                     Modifier
