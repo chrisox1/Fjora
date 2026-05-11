@@ -37,11 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -195,6 +197,35 @@ fun MpvPlayerScreen(
                 screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         }
+    }
+
+    LaunchedEffect(activity, inPip) {
+        if (inPip) return@LaunchedEffect
+        val window = activity?.window ?: return@LaunchedEffect
+        val controller = WindowCompat.getInsetsController(window, view)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, activity, inPip) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !inPip) {
+                val window = activity?.window ?: return@LifecycleEventObserver
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Auto-hide chrome after 4 seconds of no activity.
@@ -934,31 +965,39 @@ fun MpvPlayerScreen(
         // Custom subtitle overlay — text cues downloaded from Jellyfin and
         // rendered here because MPV's text subtitle support requires libass
         // which is not present in the jdtech mpv-android build.
-        // Hide our subtitle overlay entirely in PiP — at PiP-window scale a
-        // 16sp text fills most of the box and looks broken. Subs come back
-        // automatically when the user expands out of PiP.
         val activeCue = currentSubCue
-        if (activeCue != null && !inPip) {
-            // Mimic ExoPlayer's default SubtitleView caption style: white text,
-            // semi-transparent black background tight to the text, positioned
-            // near the bottom of the video. Won't be pixel-identical (ExoPlayer
-            // scales fonts to view height) but visually consistent.
+        if (activeCue != null) {
+            val subtitleFontSize = if (inPip) 13.sp else 28.sp
+            val subtitleLineHeight = if (inPip) 16.sp else 34.sp
+            val subtitleBottomPadding = if (inPip) 10.dp else 42.dp
+            val subtitleSidePadding = if (inPip) 8.dp else 24.dp
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 64.dp, start = 16.dp, end = 16.dp),
+                    .padding(
+                        bottom = subtitleBottomPadding,
+                        start = subtitleSidePadding,
+                        end = subtitleSidePadding
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = activeCue.text,
-                    fontSize = 17.sp,
-                    lineHeight = 22.sp,
+                    fontSize = subtitleFontSize,
+                    lineHeight = subtitleLineHeight,
                     fontWeight = FontWeight.Normal,
                     color = Color.White,
                     textAlign = TextAlign.Center,
+                    maxLines = if (inPip) 2 else Int.MAX_VALUE,
+                    style = TextStyle(
+                        shadow = Shadow(
+                            color = Color.Black,
+                            blurRadius = 4f
+                        )
+                    ),
                     modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
                 )
             }
         }

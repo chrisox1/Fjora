@@ -22,6 +22,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
+private const val PlayerGestureEdgeWidthFraction = 0.22f
+private const val PlayerGestureSensitivity = 0.35f
+
+private enum class PlayerGestureTarget {
+    Brightness,
+    Volume
+}
+
 internal fun Modifier.playerBrightnessVolumeGestures(
     activity: Activity?,
     audioManager: AudioManager?,
@@ -30,28 +38,49 @@ internal fun Modifier.playerBrightnessVolumeGestures(
 ): Modifier {
     if (!enabled) return this
     return pointerInput(activity, audioManager) {
-        var leftSide = true
+        var target: PlayerGestureTarget? = null
+        var startBrightness = 0.5f
+        var startVolume = 0
+        var dragFraction = 0f
         detectVerticalDragGestures(
-            onDragStart = { start -> leftSide = start.x < size.width / 2f },
+            onDragStart = { start ->
+                val edgeWidth = size.width * PlayerGestureEdgeWidthFraction
+                target = when {
+                    start.x <= edgeWidth -> PlayerGestureTarget.Brightness
+                    start.x >= size.width - edgeWidth -> PlayerGestureTarget.Volume
+                    else -> null
+                }
+                dragFraction = 0f
+                startBrightness = activity?.window?.attributes?.screenBrightness
+                    ?.takeIf { it >= 0f }
+                    ?: 0.5f
+                startVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+            },
+            onDragEnd = {
+                target = null
+                dragFraction = 0f
+            },
+            onDragCancel = {
+                target = null
+                dragFraction = 0f
+            },
             onVerticalDrag = { change, dragAmount ->
+                val activeTarget = target ?: return@detectVerticalDragGestures
                 change.consume()
-                val delta = (-dragAmount / size.height).coerceIn(-0.12f, 0.12f)
-                if (delta == 0f) return@detectVerticalDragGestures
-                if (leftSide) {
+                val height = size.height.takeIf { it > 0 } ?: return@detectVerticalDragGestures
+                dragFraction += (-dragAmount / height) * PlayerGestureSensitivity
+                if (dragFraction == 0f) return@detectVerticalDragGestures
+                if (activeTarget == PlayerGestureTarget.Brightness) {
                     val window = activity?.window ?: return@detectVerticalDragGestures
                     val attrs = window.attributes
-                    val current = attrs.screenBrightness.takeIf { it >= 0f } ?: 0.5f
-                    val next = (current + delta).coerceIn(0.02f, 1f)
+                    val next = (startBrightness + dragFraction).coerceIn(0.02f, 1f)
                     attrs.screenBrightness = next
                     window.attributes = attrs
                     onFeedback("Brightness ${(next * 100).roundToInt()}%")
                 } else {
                     val am = audioManager ?: return@detectVerticalDragGestures
                     val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-                    val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                    val step = (delta * max).roundToInt().takeIf { it != 0 }
-                        ?: if (delta > 0) 1 else -1
-                    val next = (current + step).coerceIn(0, max)
+                    val next = (startVolume + dragFraction * max).roundToInt().coerceIn(0, max)
                     am.setStreamVolume(AudioManager.STREAM_MUSIC, next, 0)
                     onFeedback("Volume ${((next.toFloat() / max.toFloat()) * 100).roundToInt()}%")
                 }
