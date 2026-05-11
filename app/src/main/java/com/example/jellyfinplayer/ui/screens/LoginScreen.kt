@@ -30,8 +30,20 @@ import com.example.jellyfinplayer.UiState
 @Composable
 fun LoginScreen(
     vm: AppViewModel,
+    /**
+     * Optional callback invoked once after a successful login. Used when the
+     * screen is shown as a sub-flow (Settings → Add account) so we can pop
+     * back to wherever opened the screen. When called as the root pre-login
+     * screen, this is left unset — the loggedIn flag flipping to true causes
+     * the AppNav to swap to Library on its own.
+     */
     onLoginComplete: () -> Unit = {}
 ) {
+    // Split the server URL into scheme and host parts. Most users only need
+    // to choose http vs https once — a tap on the segmented chip pair sets
+    // it, and the URL field holds just the bare host:port. We re-combine on
+    // submit. If the user pastes a full URL containing http:// or https://,
+    // we detect and split it transparently.
     var scheme by remember { mutableStateOf("http") }
     var server by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
@@ -48,11 +60,17 @@ fun LoginScreen(
     val submit: () -> Unit = {
         if (canSubmit) {
             keyboard?.hide()
+            // Compose the full URL from the scheme picker + host field. The
+            // repository's normalizer will still handle trailing slashes,
+            // bare IPs, etc.
             val fullUrl = "$scheme://${server.trim()}"
             vm.login(fullUrl, user.trim(), pass)
         }
     }
 
+    // Watch for a successful login transition. UiState goes Loading → Idle on
+    // success and Loading → Error on failure. Track the previous state so we
+    // only fire onLoginComplete on the success edge, not on every Idle frame.
     var wasLoading by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
         when (state) {
@@ -65,6 +83,9 @@ fun LoginScreen(
         }
     }
 
+    // Plain dark background — no gradients, no decorative shapes. The form is
+    // left-aligned and uses standard Material text fields without forced
+    // heavy rounding. Aim is "boring and trustworthy", not "designed".
     Box(
         Modifier
             .fillMaxSize()
@@ -102,6 +123,8 @@ fun LoginScreen(
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 6.dp)
             )
+            // Scheme picker — two chips side-by-side. Default is http because
+            // most home Jellyfin servers run on plain HTTP within the LAN.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -122,6 +145,9 @@ fun LoginScreen(
             OutlinedTextField(
                 value = server,
                 onValueChange = { input ->
+                    // If the user pastes a full URL with a scheme, peel it off
+                    // and update the scheme picker so they don't end up with
+                    // "http://https://example.com" on submit.
                     when {
                         input.startsWith("https://", ignoreCase = true) -> {
                             scheme = "https"

@@ -1,6 +1,11 @@
 package com.example.jellyfinplayer.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -10,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -124,6 +130,16 @@ fun LibraryScreen(
     val featuredItem = remember(continueWatching, nextUp, items) {
         continueWatching.firstOrNull() ?: nextUp.firstOrNull() ?: items.firstOrNull()
     }
+    val gridState = rememberLazyGridState()
+    val libraryTabsAtTop by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex == 0 &&
+                gridState.firstVisibleItemScrollOffset < 12
+        }
+    }
+    val showLibraryTabs = !isSearchMode &&
+        (libraries.size > 1 || downloads.isNotEmpty()) &&
+        libraryTabsAtTop
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val imageLoader = remember(context) { coil.Coil.imageLoader(context) }
@@ -283,14 +299,11 @@ fun LibraryScreen(
                 }
             }
 
-            // "My Media" library tabs — chips for the user's Jellyfin
-            // libraries plus an "All" chip and a "Downloads" chip when
-            // applicable. Hidden during search mode. Sits as a sticky strip
-            // below the search bar so it stays visible while the grid
-            // scrolls.
-            val showTabs = !isSearchMode &&
-                (libraries.size > 1 || downloads.isNotEmpty())
-            if (showTabs) {
+            AnimatedVisibility(
+                visible = showLibraryTabs,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+            ) {
                 LibraryTabs(
                     libraries = libraries,
                     selectedId = selectedLibraryId,
@@ -309,6 +322,7 @@ fun LibraryScreen(
                     }
                     else -> {
                         LazyVerticalGrid(
+                            state = gridState,
                             columns = GridCells.Adaptive(minSize = 138.dp),
                             contentPadding = PaddingValues(
                                 start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp

@@ -9,7 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -163,16 +165,16 @@ fun EpisodesScreen(
 
     if (showDownloadAllDialog) {
         DownloadAllEpisodesDialog(
-            episodeCount = episodes.size,
+            episodes = episodes,
             onDismiss = { showDownloadAllDialog = false },
-            onConfirm = { maxBitrate ->
+            onConfirm = { selectedEpisodes, maxBitrate ->
                 showDownloadAllDialog = false
                 // Enqueue every episode in the loaded list. DownloadManager
                 // serializes these internally so the device isn't slammed
                 // by N parallel TCP connections, but the records all show
                 // up in My Downloads immediately so the user can see what's
                 // queued.
-                episodes.forEach { ep ->
+                selectedEpisodes.forEach { ep ->
                     startDownload(
                         ctx = ctx,
                         vm = vm,
@@ -184,7 +186,7 @@ fun EpisodesScreen(
                 }
                 android.widget.Toast.makeText(
                     ctx,
-                    "Queued ${episodes.size} episodes for download",
+                    "Queued ${selectedEpisodes.size} episodes for download",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
@@ -547,9 +549,9 @@ private fun EpisodeRow(vm: AppViewModel, ep: MediaItem, onClick: () -> Unit) {
  */
 @Composable
 private fun DownloadAllEpisodesDialog(
-    episodeCount: Int,
+    episodes: List<MediaItem>,
     onDismiss: () -> Unit,
-    onConfirm: (Long?) -> Unit
+    onConfirm: (List<MediaItem>, Long?) -> Unit
 ) {
     val options: List<Pair<Long?, String>> = listOf(
         null to "Original quality (recommended)",
@@ -559,22 +561,43 @@ private fun DownloadAllEpisodesDialog(
         1_000_000L to "360p (~1 Mbps)"
     )
     var selected by remember { mutableStateOf<Long?>(null) }
+    val seasons = remember(episodes) {
+        episodes.mapNotNull { it.seasonNumber }.distinct().sorted()
+    }
+    var selectedSeasons by remember(seasons) {
+        mutableStateOf(seasons.toSet())
+    }
+    val selectedEpisodes = remember(episodes, selectedSeasons) {
+        if (seasons.isEmpty()) {
+            episodes
+        } else {
+            episodes.filter { it.seasonNumber in selectedSeasons }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Download all episodes", fontWeight = FontWeight.SemiBold) },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }) {
-                Text("Download $episodeCount", fontWeight = FontWeight.SemiBold)
+            TextButton(
+                enabled = selectedEpisodes.isNotEmpty(),
+                onClick = { onConfirm(selectedEpisodes, selected) }
+            ) {
+                Text("Download ${selectedEpisodes.size}", fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
         text = {
-            Column {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text(
-                    "This will download $episodeCount episodes. Original " +
+                    "This will download ${selectedEpisodes.size} episodes. Original " +
                         "quality is fastest and uses no server CPU; other " +
                         "qualities require the server to transcode every " +
                         "episode, which can take a long time and consume " +
@@ -583,6 +606,48 @@ private fun DownloadAllEpisodesDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
+                if (seasons.size > 1) {
+                    Text(
+                        "Seasons",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    seasons.forEach { season ->
+                        val checked = season in selectedSeasons
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedSeasons = if (checked) {
+                                        selectedSeasons - season
+                                    } else {
+                                        selectedSeasons + season
+                                    }
+                                }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = { isChecked ->
+                                    selectedSeasons = if (isChecked) {
+                                        selectedSeasons + season
+                                    } else {
+                                        selectedSeasons - season
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            val count = episodes.count { it.seasonNumber == season }
+                            Text(
+                                "${if (season == 0) "Specials" else "Season $season"} ($count)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
                 options.forEach { (value, label) ->
                     Row(
                         Modifier

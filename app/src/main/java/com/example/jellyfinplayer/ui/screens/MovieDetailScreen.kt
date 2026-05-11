@@ -41,6 +41,9 @@ fun MovieDetailScreen(
     onPlay: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit = {}
 ) {
+    // Try to fetch full details (with overview, mediaSources etc.) — fall
+    // back to whatever the list-level item gave us. Detail lookups can fail
+    // on slow servers so we render with what we have either way.
     var details by remember { mutableStateOf(item) }
     var loadingDetails by remember { mutableStateOf(true) }
     LaunchedEffect(item.id) {
@@ -56,7 +59,7 @@ fun MovieDetailScreen(
         containerColor = cs.background,
         topBar = {
             TopAppBar(
-                title = {},
+                title = { /* empty — the hero shows the title */ },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -77,6 +80,9 @@ fun MovieDetailScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            // Top hero — backdrop with gradient scrim, title + meta overlaid.
+            // Sits BEHIND the system bars (the scaffold padding is applied
+            // only to the content below).
             Hero(vm, details, topPadding = padding.calculateTopPadding())
 
             AnimatedVisibility(
@@ -93,9 +99,14 @@ fun MovieDetailScreen(
 
             Spacer(Modifier.height(20.dp))
 
+            // Primary CTA row — Resume/Play and Download. Both full-width
+            // when alone; sit side-by-side when both shown.
             val started = (details.userData?.playbackPositionTicks ?: 0L) > 0L
             var showDownloadDialog by remember { mutableStateOf(false) }
 
+            // Lookup any existing download for this item — used both by the
+            // button (to flip Download/Check) and by the progress bar below
+            // the row.
             val downloads = vm.downloads.collectAsState().value
             val existingDownload = remember(downloads, details.id) {
                 downloads.firstOrNull { it.itemId == details.id }
@@ -137,6 +148,11 @@ fun MovieDetailScreen(
                     val isInFlight = downloadStatus?.isInFlight == true
                     OutlinedButton(
                         onClick = {
+                            // Tapping during an in-flight download is a no-op
+                            // (already running). Tapping when complete is
+                            // also a no-op for now (would require a re-
+                            // download confirm dialog). Otherwise opens the
+                            // quality picker.
                             if (!isInFlight && !isComplete) showDownloadDialog = true
                         },
                         shape = RoundedCornerShape(8.dp),
@@ -152,6 +168,10 @@ fun MovieDetailScreen(
                 }
             }
 
+            // Linear progress bar BELOW the button row. Only visible when
+            // a download for this item is actively in flight. Sits directly
+            // under the buttons so the user can see exactly how far along
+            // their download is without leaving the detail screen.
             if (downloadStatus?.isInFlight == true) {
                 Spacer(Modifier.height(10.dp))
                 Column(
@@ -168,6 +188,9 @@ fun MovieDetailScreen(
                                 .clip(RoundedCornerShape(3.dp))
                         )
                     } else {
+                        // No total size yet — indeterminate bar makes it
+                        // clear something is happening even before the
+                        // server reports Content-Length.
                         LinearProgressIndicator(
                             color = cs.primary,
                             trackColor = cs.surfaceVariant,
@@ -178,6 +201,7 @@ fun MovieDetailScreen(
                         )
                     }
                     Spacer(Modifier.height(6.dp))
+                    // Status line: "12% · 145 MB of 1.2 GB" or "Starting…"
                     val statusLine = when {
                         downloadStatus.progress == null -> "Preparing download…"
                         downloadStatus.totalBytes <= 0L ->
@@ -212,6 +236,10 @@ fun MovieDetailScreen(
                 )
             }
 
+            // Synopsis. Wrapped in animateContentSize so when stale data
+            // (just the title) is replaced by the fuller details (with the
+            // overview text), the layout grows smoothly rather than the
+            // text popping in abruptly.
             if (!details.overview.isNullOrBlank()) {
                 Text(
                     details.overview!!,
@@ -227,6 +255,7 @@ fun MovieDetailScreen(
                 Spacer(Modifier.height(20.dp))
             }
 
+            // Genres as chips. Looks better than a comma list.
             if (details.genres.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -247,8 +276,12 @@ fun MovieDetailScreen(
                 }
             }
 
+            // Detail rows — show only the ones with actual data.
             DetailGrid(details)
 
+            // Cast & crew strip — horizontally scrollable. Filters to actors
+            // first, then directors and writers if there's room. Many items
+            // have 30+ entries; we cap at 20 to keep things scannable.
             CastRow(vm = vm, people = details.people, onPersonClick = onPersonClick)
 
             Spacer(Modifier.height(32.dp))
@@ -263,6 +296,9 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
         Modifier
             .fillMaxWidth()
             .height(320.dp)
+            // Surface-tinted placeholder behind the backdrop. The image fades
+            // in over this via Coil's global crossfade, which feels like a
+            // smooth load-in instead of a hard pop from black.
             .background(cs.surfaceVariant)
     ) {
         val backdrop = vm.backdropUrl(item, maxWidth = 1280)
@@ -276,6 +312,8 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
         } else {
             Box(Modifier.fillMaxSize().background(cs.surfaceVariant))
         }
+        // Scrim — darker at top (so back arrow is legible) and at bottom (so
+        // the title is legible) but transparent in the middle of the image.
         Box(
             Modifier
                 .fillMaxSize()
@@ -288,6 +326,7 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
                     )
                 )
         )
+        // Poster + title row at the bottom.
         Row(
             Modifier
                 .align(Alignment.BottomStart)
@@ -295,7 +334,8 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
             verticalAlignment = Alignment.Bottom
         ) {
             val posterUrl = vm.posterUrl(item, maxHeight = 480)
-            if (posterUrl != null) {
+            val showPoster = item.type != "Episode"
+            if (showPoster && posterUrl != null) {
                 Box(
                     Modifier
                         .width(96.dp)
@@ -313,6 +353,9 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
                 Spacer(Modifier.width(14.dp))
             }
             Column(Modifier.weight(1f)) {
+                // For episodes, show "Series · S2 E5" above the episode title
+                // so the user can place it in context. For movies, this stays
+                // hidden (no series, no episode numbers).
                 val isEpisode = item.type == "Episode"
                 if (isEpisode) {
                     val context = buildList {
@@ -442,6 +485,7 @@ internal fun DetailGrid(item: MediaItem) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                // Technical spec badges — resolution, codec, container
                 if (badges.isNotEmpty()) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -463,6 +507,7 @@ internal fun DetailGrid(item: MediaItem) {
                         }
                     }
                 }
+                // Info rows — audio, subtitles, director
                 infoRows.forEachIndexed { index, (label, value) ->
                     if (index > 0) {
                         HorizontalDivider(
@@ -490,6 +535,15 @@ internal fun DetailGrid(item: MediaItem) {
     }
 }
 
+/**
+ * Quality picker for downloads. The user chooses between Original (server
+ * just serves the raw file — fast, no extra server load) or one of several
+ * transcoded targets (server uses ffmpeg to re-encode at the chosen
+ * bitrate — slow, server-CPU intensive).
+ *
+ * The dialog leads with the Original option and shows a clear warning at
+ * the top about the cost of transcoded downloads.
+ */
 @Composable
 internal fun DownloadQualityDialog(
     onDismiss: () -> Unit,
@@ -502,10 +556,16 @@ internal fun DownloadQualityDialog(
         3_000_000L to "480p (~3 Mbps)",
         1_000_000L to "360p (~1 Mbps)"
     )
+    // User's currently-selected option. Defaults to "Original" since that
+    // matches the recommended choice and avoids unnecessary server load.
     var selected by remember { mutableStateOf<Long?>(null) }
 
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val destinationPath = remember(ctx) {
+        // Resolve the actual external-files Movies dir so we can show the
+        // user where the file will land. On most phones this resolves to
+        // /storage/emulated/0/Android/data/<package>/files/Movies — we
+        // shorten the leading prefix for readability.
         val dir = ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
         dir?.absolutePath
             ?.replace("/storage/emulated/0", "Internal storage")
@@ -551,6 +611,10 @@ internal fun DownloadQualityDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
+                // Destination disclosure — tells the user where the file
+                // will land. App-private external storage means the file
+                // sticks around for the lifetime of the install but is
+                // removed when the app is uninstalled (no orphaned files).
                 Text(
                     "Saves to: $destinationPath",
                     style = MaterialTheme.typography.labelSmall,
@@ -566,6 +630,12 @@ internal fun DownloadQualityDialog(
     )
 }
 
+/**
+ * Hand the URL to Android's DownloadManager. The download proceeds in the
+ * background with a progress notification managed by the system, and the
+ * resulting file lands in the user's Downloads folder. No in-app download
+ * list necessary — the system's downloads UI handles management.
+ */
 internal fun startDownload(
     ctx: android.content.Context,
     vm: AppViewModel,
@@ -577,9 +647,18 @@ internal fun startDownload(
     try {
         val safeName = item.name.replace(Regex("""[^A-Za-z0-9._\- ]"""), "_")
             .ifBlank { "download" }
+        // Original-quality downloads keep whatever container the source is
+        // (commonly mkv); transcoded downloads are always served as MP4 by
+        // the server's transcode endpoint.
         val ext = if (isOriginal) ".mkv" else ".mp4"
         val fileName = "${safeName}_${item.id.takeLast(6)}$ext"
 
+        // Storage layout: movies and episodes go into separate folders so
+        // a 5-season download doesn't bury your movies. Movies land flat in
+        // /files/Movies; episodes go under /files/Movies/<series>/.
+        // (We keep everything under DIRECTORY_MOVIES because Android's
+        // public-dir API only has these standard buckets — there's no
+        // "DIRECTORY_TV". The subdir under it is our own organization.)
         val safeSeries = item.seriesName?.replace(Regex("""[^A-Za-z0-9._\- ]"""), "_")
             ?.trim()
             ?.ifBlank { null }
@@ -589,8 +668,13 @@ internal fun startDownload(
             fileName
         }
 
+        // CRITICAL: DownloadManager doesn't auto-create parent directories
+        // when given a subPath with slashes — it just tries to write to
+        // the path, which silently fails if the parent dir doesn't exist.
+        // Pre-create the series folder so the download can land inside it.
         val moviesDir = ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
         if (subPath != fileName && moviesDir != null) {
+            // subPath has a series subfolder — make sure it exists.
             java.io.File(moviesDir, safeSeries!!).mkdirs()
         }
 

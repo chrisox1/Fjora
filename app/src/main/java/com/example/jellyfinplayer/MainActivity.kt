@@ -29,7 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.lifecycle.Lifecycle
 import com.example.jellyfinplayer.api.MediaItem
+import com.example.jellyfinplayer.api.MediaSource
+import com.example.jellyfinplayer.api.MediaStream
 import com.example.jellyfinplayer.api.Person
+import com.example.jellyfinplayer.data.DownloadsStore
 import com.example.jellyfinplayer.ui.screens.DownloadedDetailScreen
 import com.example.jellyfinplayer.ui.screens.DownloadedSeriesScreen
 import com.example.jellyfinplayer.ui.screens.EpisodesScreen
@@ -411,24 +414,12 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                             settings.directPlayOnly
                         screen = if (useMpv) {
                             Screen.MpvPlayer(
-                                item = MediaItem(
-                                    id = rec.itemId,
-                                    name = rec.title,
-                                    type = if (rec.seriesName != null) "Episode" else "Movie",
-                                    seriesName = rec.seriesName,
-                                    seriesId = rec.seriesId
-                                ),
+                                item = rec.toLocalMediaItem(),
                                 localFilePath = path
                             )
                         } else {
                             Screen.Player(
-                                item = MediaItem(
-                                    id = rec.itemId,
-                                    name = rec.title,
-                                    type = if (rec.seriesName != null) "Episode" else "Movie",
-                                    seriesName = rec.seriesName,
-                                    seriesId = rec.seriesId
-                                ),
+                                item = rec.toLocalMediaItem(),
                                 localFilePath = path
                             )
                         }
@@ -576,6 +567,44 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
             )
         }
     }
+}
+
+private fun DownloadsStore.DownloadRecord.toLocalMediaItem(): MediaItem {
+    val subtitleStreams = subtitlePaths.mapIndexedNotNull { idx, path ->
+        val file = java.io.File(path)
+        if (!file.exists()) return@mapIndexedNotNull null
+        val language = file.nameWithoutExtension.substringAfterLast('_', "")
+            .takeIf { it.isNotBlank() && !it.startsWith("sub", ignoreCase = true) }
+        MediaStream(
+            index = idx,
+            type = "Subtitle",
+            codec = file.extension.ifBlank { "srt" },
+            language = language,
+            displayTitle = language?.uppercase() ?: "External subtitle ${idx + 1}",
+            title = file.nameWithoutExtension,
+            isExternal = true,
+            deliveryUrl = file.absolutePath
+        )
+    }
+
+    return MediaItem(
+        id = itemId,
+        name = title,
+        type = if (seriesName != null) "Episode" else "Movie",
+        productionYear = productionYear,
+        overview = overview,
+        runTimeTicks = runtimeMinutes?.let { it.toLong() * 60L * 10_000_000L },
+        seriesName = seriesName,
+        seriesId = seriesId,
+        episodeNumber = episodeNumber,
+        seasonNumber = seasonNumber,
+        mediaSources = listOf(
+            MediaSource(
+                id = "local",
+                mediaStreams = subtitleStreams
+            )
+        )
+    )
 }
 
 @Composable

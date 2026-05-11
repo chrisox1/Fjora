@@ -26,6 +26,13 @@ import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.data.DownloadsStore.DownloadRecord
 import com.example.jellyfinplayer.ui.components.CastRow
 
+/**
+ * Detail screen for a downloaded movie or episode. Fetches full item metadata
+ * from the server when online so it looks identical to MovieDetailScreen (hero
+ * backdrop, cast row, genre chips, detail grid). Falls back to a simple offline
+ * layout using the metadata cached in DownloadRecord when the server is
+ * unreachable.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadedDetailScreen(
@@ -47,6 +54,9 @@ fun DownloadedDetailScreen(
         return
     }
 
+    // Try to fetch full server details for rich metadata (cast, backdrop, etc.).
+    // The DownloadRecord is always the source of truth for playback; server data
+    // is display-only.
     var serverItem by remember { mutableStateOf<MediaItem?>(null) }
     var loadingDetails by remember { mutableStateOf(true) }
     LaunchedEffect(record.itemId) {
@@ -63,7 +73,7 @@ fun DownloadedDetailScreen(
         containerColor = cs.background,
         topBar = {
             TopAppBar(
-                title = {},
+                title = { /* hero shows the title */ },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -93,6 +103,9 @@ fun DownloadedDetailScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            // Hero — uses server data when available for the backdrop. Passes
+            // topPadding=0 because we intentionally let the backdrop fill the
+            // full top area (same as MovieDetailScreen).
             val heroItem = serverItem ?: buildFallbackItem(record)
             Hero(vm = vm, item = heroItem, topPadding = padding.calculateTopPadding())
 
@@ -110,6 +123,7 @@ fun DownloadedDetailScreen(
 
             Spacer(Modifier.height(20.dp))
 
+            // Action row — Play (local file) and Open with another app.
             Row(
                 modifier = Modifier
                     .tabletContentWidth()
@@ -150,6 +164,7 @@ fun DownloadedDetailScreen(
                 }
             }
 
+            // Overview / synopsis.
             val overview = serverItem?.overview ?: record.overview
             if (!overview.isNullOrBlank()) {
                 Text(
@@ -166,6 +181,7 @@ fun DownloadedDetailScreen(
                 Spacer(Modifier.height(20.dp))
             }
 
+            // Genres chips — only available from server data.
             val genres = serverItem?.genres ?: emptyList()
             if (genres.isNotEmpty()) {
                 Row(
@@ -187,8 +203,11 @@ fun DownloadedDetailScreen(
                 }
             }
 
+            // Technical detail grid — prefer server data since it has full
+            // media stream info; fall back to the stub built from DownloadRecord.
             DetailGrid(serverItem ?: buildFallbackItem(record))
 
+            // Cast row — only available when server returned full details.
             val people = serverItem?.people ?: emptyList()
             if (people.isNotEmpty()) {
                 CastRow(vm = vm, people = people, onPersonClick = onPersonClick)
