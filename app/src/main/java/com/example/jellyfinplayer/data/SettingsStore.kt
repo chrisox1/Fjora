@@ -64,8 +64,11 @@ class SettingsStore(private val context: Context) {
             showNextUpRow = prefs[SHOW_NEXT_UP_ROW] ?: true,
             forceTranscoding = prefs[FORCE_TRANSCODING] ?: false,
             directPlayOnly = directPlayOnly,
-            useMpvForLocal = if (directPlayOnly) true else prefs[USE_MPV] ?: false,
-            useMpvForAll = directPlayOnly,
+            useMpvForLocal = effectiveUseMpvForLocal(
+                directPlayOnly = directPlayOnly,
+                storedUseMpvForLocal = prefs[USE_MPV] ?: false
+            ),
+            useMpvForAll = effectiveUseMpvForAll(directPlayOnly),
             alwaysPlaySubtitles = prefs[ALWAYS_PLAY_SUBTITLES] ?: false,
             preferredSubtitleLanguage = prefs[PREFERRED_SUBTITLE_LANGUAGE]?.takeIf { it.isNotBlank() },
             subtitleTextScale = (prefs[SUBTITLE_TEXT_SCALE] ?: 1.0f).coerceIn(0.75f, 1.4f),
@@ -168,3 +171,10 @@ class SettingsStore(private val context: Context) {
         }
     }
 }
+
+internal fun effectiveUseMpvForLocal(
+    directPlayOnly: Boolean,
+    storedUseMpvForLocal: Boolean
+): Boolean = directPlayOnly || storedUseMpvForLocal
+
+internal fun effectiveUseMpvForAll(directPlayOnly: Boolean): Boolean = directPlayOnly

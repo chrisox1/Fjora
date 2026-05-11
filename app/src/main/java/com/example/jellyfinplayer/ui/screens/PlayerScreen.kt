@@ -1612,7 +1612,7 @@ private fun subtitleLanguageAliases(language: String): Set<String> {
     }
 }
 
-private fun clampedExoSubtitleFraction(
+internal fun clampedExoSubtitleFraction(
     screenHeightDp: Int,
     scale: Float,
     inPip: Boolean

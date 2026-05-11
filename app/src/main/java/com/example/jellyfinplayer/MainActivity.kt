@@ -33,6 +33,8 @@ import com.example.jellyfinplayer.api.MediaSource
 import com.example.jellyfinplayer.api.MediaStream
 import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.data.DownloadsStore
+import com.example.jellyfinplayer.player.initialSeasonForEpisodeReturn
+import com.example.jellyfinplayer.player.nextEpisodeAfter
 import com.example.jellyfinplayer.ui.screens.DownloadedDetailScreen
 import com.example.jellyfinplayer.ui.screens.DownloadedSeriesScreen
 import com.example.jellyfinplayer.ui.screens.EpisodesScreen
@@ -277,11 +279,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series, s.item.seasonNumber)
+                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.item))
                 else -> Screen.Library
             }
             is Screen.MovieDetail -> when {
-                s.series != null -> Screen.Episodes(s.series, s.movie.seasonNumber)
+                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.movie))
                 else -> Screen.Library
             }
             is Screen.Episodes -> Screen.Library
@@ -312,7 +314,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series, s.item.seasonNumber)
+                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.item))
                 else -> Screen.Library
             }
             is Screen.Library -> Screen.Library
@@ -466,8 +468,9 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 vm = vm,
                 item = s.movie,
                 onBack = {
-                    screen = if (s.series != null) Screen.Episodes(s.series, s.movie.seasonNumber)
-                             else Screen.Library
+                    screen = if (s.series != null)
+                        Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.movie))
+                    else Screen.Library
                 },
                 onPlay = { item ->
                     val settings = vm.settings.value
@@ -538,7 +541,10 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                         // detail screen for downloaded items.
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(s.series, s.movieDetail?.seasonNumber ?: s.item.seasonNumber)
+                        s.series != null -> Screen.Episodes(
+                            s.series,
+                            initialSeasonForEpisodeReturn(s.movieDetail ?: s.item)
+                        )
                         else -> Screen.Library
                     }
                 },
@@ -571,7 +577,10 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     screen = when {
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(s.series, s.movieDetail?.seasonNumber ?: s.item.seasonNumber)
+                        s.series != null -> Screen.Episodes(
+                            s.series,
+                            initialSeasonForEpisodeReturn(s.movieDetail ?: s.item)
+                        )
                         else -> Screen.Library
                     }
                 }
@@ -629,17 +638,5 @@ private fun nextEpisodeFor(
         value = runCatching { vm.loadEpisodes(seriesId) }.getOrDefault(emptyList())
     }
     if (episodes.isEmpty()) return null
-    val currentIndex = episodes.indexOfFirst { it.id == current.id }
-    if (currentIndex >= 0) return episodes.getOrNull(currentIndex + 1)
-
-    val currentSeason = current.seasonNumber ?: return null
-    val currentEpisode = current.episodeNumber ?: return null
-    return episodes
-        .filter { episode ->
-            val season = episode.seasonNumber ?: Int.MAX_VALUE
-            val number = episode.episodeNumber ?: Int.MAX_VALUE
-            season > currentSeason || (season == currentSeason && number > currentEpisode)
-        }
-        .minWithOrNull(compareBy<MediaItem> { it.seasonNumber ?: Int.MAX_VALUE }
-            .thenBy { it.episodeNumber ?: Int.MAX_VALUE })
+    return nextEpisodeAfter(current, episodes)
 }

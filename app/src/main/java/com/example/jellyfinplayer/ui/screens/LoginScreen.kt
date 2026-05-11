@@ -59,7 +59,7 @@ fun LoginScreen(
     val passFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    val fullServerUrl = "$scheme://${server.trim()}"
+    val fullServerUrl = buildFullServerUrl(scheme, server)
     val quickBusy = quickState is QuickConnectState.Starting ||
         quickState is QuickConnectState.Waiting ||
         quickState is QuickConnectState.Completing
@@ -160,17 +160,9 @@ fun LoginScreen(
                     // If the user pastes a full URL with a scheme, peel it off
                     // and update the scheme picker so they don't end up with
                     // "http://https://example.com" on submit.
-                    when {
-                        input.startsWith("https://", ignoreCase = true) -> {
-                            scheme = "https"
-                            server = input.removePrefix("https://").removePrefix("HTTPS://")
-                        }
-                        input.startsWith("http://", ignoreCase = true) -> {
-                            scheme = "http"
-                            server = input.removePrefix("http://").removePrefix("HTTP://")
-                        }
-                        else -> server = input
-                    }
+                    val parsed = parseServerInput(scheme, input)
+                    scheme = parsed.scheme
+                    server = parsed.server
                 },
                 placeholder = { Text("192.168.1.10:8096") },
                 singleLine = true,
