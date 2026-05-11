@@ -9,7 +9,7 @@ It uses Exoplayer by default, but includes option to use the MPV player for dire
 Fjora is a third-party Jellyfin player. It is not affiliated with, endorsed
 by, or sponsored by the Jellyfin project.
 
-Current release: `v0.1.0 beta`
+Current release: `v0.1.1 beta`
 
 ## Status
 
