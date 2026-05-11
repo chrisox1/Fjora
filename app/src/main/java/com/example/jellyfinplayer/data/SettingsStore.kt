@@ -3,6 +3,7 @@ package com.example.jellyfinplayer.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -24,6 +25,11 @@ class SettingsStore(private val context: Context) {
         val DIRECT_PLAY_ONLY = booleanPreferencesKey("direct_play_only")
         val ALWAYS_PLAY_SUBTITLES = booleanPreferencesKey("always_play_subtitles")
         val PREFERRED_SUBTITLE_LANGUAGE = stringPreferencesKey("preferred_subtitle_language")
+        val SUBTITLE_TEXT_SCALE = floatPreferencesKey("subtitle_text_scale")
+        val SUBTITLE_COLOR = stringPreferencesKey("subtitle_color")
+        val SUBTITLE_BACKGROUND = booleanPreferencesKey("subtitle_background")
+        val SUBTITLE_DELAY_MS = longPreferencesKey("subtitle_delay_ms")
+        val DOWNLOAD_STORAGE_LIMIT_BYTES = longPreferencesKey("download_storage_limit_bytes")
     }
 
     data class Settings(
@@ -42,7 +48,12 @@ class SettingsStore(private val context: Context) {
         val useMpvForLocal: Boolean,
         val useMpvForAll: Boolean,
         val alwaysPlaySubtitles: Boolean,
-        val preferredSubtitleLanguage: String?
+        val preferredSubtitleLanguage: String?,
+        val subtitleTextScale: Float,
+        val subtitleColor: String,
+        val subtitleBackground: Boolean,
+        val subtitleDelayMs: Long,
+        val downloadStorageLimitBytes: Long?
     )
 
     val flow: Flow<Settings> = context.settingsDataStore.data.map { prefs ->
@@ -56,7 +67,12 @@ class SettingsStore(private val context: Context) {
             useMpvForLocal = if (directPlayOnly) true else prefs[USE_MPV] ?: false,
             useMpvForAll = directPlayOnly,
             alwaysPlaySubtitles = prefs[ALWAYS_PLAY_SUBTITLES] ?: false,
-            preferredSubtitleLanguage = prefs[PREFERRED_SUBTITLE_LANGUAGE]?.takeIf { it.isNotBlank() }
+            preferredSubtitleLanguage = prefs[PREFERRED_SUBTITLE_LANGUAGE]?.takeIf { it.isNotBlank() },
+            subtitleTextScale = (prefs[SUBTITLE_TEXT_SCALE] ?: 1.0f).coerceIn(0.75f, 1.4f),
+            subtitleColor = prefs[SUBTITLE_COLOR]?.takeIf { it.isNotBlank() } ?: "white",
+            subtitleBackground = prefs[SUBTITLE_BACKGROUND] ?: false,
+            subtitleDelayMs = (prefs[SUBTITLE_DELAY_MS] ?: 0L).coerceIn(-5_000L, 5_000L),
+            downloadStorageLimitBytes = prefs[DOWNLOAD_STORAGE_LIMIT_BYTES]?.takeIf { it > 0L }
         )
     }
 
@@ -118,6 +134,37 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { prefs ->
             if (language.isNullOrBlank()) prefs.remove(PREFERRED_SUBTITLE_LANGUAGE)
             else prefs[PREFERRED_SUBTITLE_LANGUAGE] = language
+        }
+    }
+
+    suspend fun setSubtitleTextScale(scale: Float) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SUBTITLE_TEXT_SCALE] = scale.coerceIn(0.75f, 1.4f)
+        }
+    }
+
+    suspend fun setSubtitleColor(color: String) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SUBTITLE_COLOR] = color
+        }
+    }
+
+    suspend fun setSubtitleBackground(enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SUBTITLE_BACKGROUND] = enabled
+        }
+    }
+
+    suspend fun setSubtitleDelayMs(delayMs: Long) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SUBTITLE_DELAY_MS] = delayMs.coerceIn(-5_000L, 5_000L)
+        }
+    }
+
+    suspend fun setDownloadStorageLimitBytes(bytes: Long?) {
+        context.settingsDataStore.edit { prefs ->
+            if (bytes == null || bytes <= 0L) prefs.remove(DOWNLOAD_STORAGE_LIMIT_BYTES)
+            else prefs[DOWNLOAD_STORAGE_LIMIT_BYTES] = bytes
         }
     }
 }

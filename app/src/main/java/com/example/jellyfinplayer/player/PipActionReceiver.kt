@@ -3,6 +3,8 @@ package com.example.jellyfinplayer.player
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.app.Activity
+import android.os.Build
 
 /**
  * Bridge between PiP-overlay action button presses and whichever player is
@@ -35,6 +37,7 @@ class PipActionReceiver : BroadcastReceiver() {
         @Volatile var activePlayNext: (() -> Unit)? = null
         @Volatile var activeIsPlaying: (() -> Boolean)? = null
         @Volatile var activeStop: (() -> Unit)? = null
+        @Volatile var activeRefreshPip: (() -> Unit)? = null
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
@@ -53,6 +56,28 @@ class PipActionReceiver : BroadcastReceiver() {
                     else -> Unit
                 }
             }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                activeRefreshPip?.invoke() ?: refreshPipActions(context)
+            }, 120L)
         }
+    }
+
+    private fun refreshPipActions(context: Context?) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val activity = context as? Activity ?: return
+        if (!activity.isInPictureInPictureMode) return
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            runCatching {
+                activity.setPictureInPictureParams(
+                    buildPipParamsForPlayer(
+                        activity = activity,
+                        aspectWidth = com.example.jellyfinplayer.PlayerPresence.aspectWidth,
+                        aspectHeight = com.example.jellyfinplayer.PlayerPresence.aspectHeight,
+                        isPlaying = activeIsPlaying?.invoke() == true,
+                        hasNext = activePlayNext != null
+                    )
+                )
+            }
+        }, 120L)
     }
 }

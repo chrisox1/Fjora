@@ -645,6 +645,15 @@ internal fun startDownload(
     maxBitrate: Long?
 ) {
     try {
+        val limit = vm.settings.value.downloadStorageLimitBytes
+        if (limit != null && currentDownloadStorageBytes(vm) >= limit) {
+            android.widget.Toast.makeText(
+                ctx,
+                "Download storage limit reached. Delete downloads or raise the limit in Settings.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         val safeName = item.name.replace(Regex("""[^A-Za-z0-9._\- ]"""), "_")
             .ifBlank { "download" }
         // Original-quality downloads keep whatever container the source is
@@ -805,6 +814,16 @@ internal fun startDownload(
             "Couldn't start download: ${t.message}",
             android.widget.Toast.LENGTH_LONG
         ).show()
+    }
+}
+
+private fun currentDownloadStorageBytes(vm: AppViewModel): Long {
+    return vm.downloads.value.sumOf { rec ->
+        rec.filePath
+            ?.let { runCatching { java.io.File(it).length() }.getOrNull() }
+            ?.takeIf { it > 0L }
+            ?: rec.sizeBytes.takeIf { it > 0L }
+            ?: 0L
     }
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -297,8 +298,16 @@ fun MpvPlayerScreen(
         }.onSuccess {
             resolved = it
             sourceUrl = it.url
+            com.example.jellyfinplayer.data.DiagnosticLog.record(
+                ctx,
+                "MPV resolved ${(details ?: item).name}: playMethod=${it.playMethod}, directPlayOnly=${settings.directPlayOnly}"
+            )
         }.onFailure {
             initError = it.message ?: "Couldn't get a playable stream from the server."
+            com.example.jellyfinplayer.data.DiagnosticLog.record(
+                ctx,
+                "MPV resolve failed for ${item.name}: ${it.message ?: it::class.java.simpleName}"
+            )
         }
     }
 
@@ -334,7 +343,7 @@ fun MpvPlayerScreen(
                 if (pause != null) isPlaying = !pause
                 mpvBuffering = caching
                 if (subtitleCues.isNotEmpty()) {
-                    val nowMs = positionMs
+                    val nowMs = positionMs + settings.subtitleDelayMs
                     currentSubCue = subtitleCues.firstOrNull { it.startMs <= nowMs && nowMs < it.endMs }
                 }
             }
@@ -463,6 +472,10 @@ fun MpvPlayerScreen(
             mpvFirstFrameReady = true
         }.onFailure {
             initError = "Couldn't start mpv: ${it.message}"
+            com.example.jellyfinplayer.data.DiagnosticLog.record(
+                ctx,
+                "MPV start failed for ${item.name}: ${it.message ?: it::class.java.simpleName}"
+            )
         }
     }
 
@@ -514,7 +527,7 @@ fun MpvPlayerScreen(
 
     // Register PiP-overlay action handlers so the play/pause/skip buttons
     // in the PiP overlay drive MPV. Cleared on dispose.
-    DisposableEffect(item.id, nextEpisode, onPlayNext) {
+    DisposableEffect(item.id, nextEpisode, onPlayNext, activity, inPip) {
         val pip = com.example.jellyfinplayer.player.PipActionReceiver
         pip.activeIsPlaying = {
             runCatching { MPVLib.getPropertyBoolean("pause") == false }
@@ -541,6 +554,23 @@ fun MpvPlayerScreen(
         pip.activeStop = {
             runCatching { MPVLib.setPropertyBoolean("pause", true) }
         }
+        pip.activeRefreshPip = {
+            if (inPip && activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching {
+                    activity.setPictureInPictureParams(
+                        com.example.jellyfinplayer.player.buildPipParamsForPlayer(
+                            activity = activity,
+                            aspectWidth = com.example.jellyfinplayer.PlayerPresence.aspectWidth,
+                            aspectHeight = com.example.jellyfinplayer.PlayerPresence.aspectHeight,
+                            isPlaying = runCatching {
+                                MPVLib.getPropertyBoolean("pause") == false
+                            }.getOrDefault(false),
+                            hasNext = nextEpisode != null && onPlayNext != null
+                        )
+                    )
+                }
+            }
+        }
         pip.activePlayNext =
             if (nextEpisode != null && onPlayNext != null) {
                 { onPlayNext(nextEpisode) }
@@ -552,6 +582,7 @@ fun MpvPlayerScreen(
             pip.activeForward = null
             pip.activeStop = null
             pip.activePlayNext = null
+            pip.activeRefreshPip = null
         }
     }
 
@@ -967,8 +998,10 @@ fun MpvPlayerScreen(
         // which is not present in the jdtech mpv-android build.
         val activeCue = currentSubCue
         if (activeCue != null) {
-            val subtitleFontSize = if (inPip) 13.sp else 28.sp
-            val subtitleLineHeight = if (inPip) 16.sp else 34.sp
+            val subtitleFontSize = if (inPip) 12.sp else 24.sp
+            val scaledSubtitleFontSize = (subtitleFontSize.value * settings.subtitleTextScale).sp
+            val subtitleLineHeight = if (inPip) 15.sp else 30.sp
+            val scaledSubtitleLineHeight = (subtitleLineHeight.value * settings.subtitleTextScale).sp
             val subtitleBottomPadding = if (inPip) 10.dp else 42.dp
             val subtitleSidePadding = if (inPip) 8.dp else 24.dp
             Box(
@@ -983,10 +1016,10 @@ fun MpvPlayerScreen(
             ) {
                 Text(
                     text = activeCue.text,
-                    fontSize = subtitleFontSize,
-                    lineHeight = subtitleLineHeight,
+                    fontSize = scaledSubtitleFontSize,
+                    lineHeight = scaledSubtitleLineHeight,
                     fontWeight = FontWeight.Normal,
-                    color = Color.White,
+                    color = subtitleComposeColor(settings.subtitleColor),
                     textAlign = TextAlign.Center,
                     maxLines = if (inPip) 2 else Int.MAX_VALUE,
                     style = TextStyle(
@@ -997,6 +1030,15 @@ fun MpvPlayerScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(
+                            if (settings.subtitleBackground) {
+                                Modifier
+                                    .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                                    .padding(vertical = 2.dp)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(horizontal = 8.dp)
                 )
             }

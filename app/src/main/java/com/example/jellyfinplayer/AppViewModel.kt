@@ -103,7 +103,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             useMpvForLocal = false,
             useMpvForAll = false,
             alwaysPlaySubtitles = false,
-            preferredSubtitleLanguage = null
+            preferredSubtitleLanguage = null,
+            subtitleTextScale = 1.0f,
+            subtitleColor = "white",
+            subtitleBackground = false,
+            subtitleDelayMs = 0L,
+            downloadStorageLimitBytes = null
         )
     )
 
@@ -141,6 +146,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setPreferredSubtitleLanguage(language: String?) {
         viewModelScope.launch { settingsStore.setPreferredSubtitleLanguage(language) }
+    }
+
+    fun setSubtitleTextScale(scale: Float) {
+        viewModelScope.launch { settingsStore.setSubtitleTextScale(scale) }
+    }
+
+    fun setSubtitleColor(color: String) {
+        viewModelScope.launch { settingsStore.setSubtitleColor(color) }
+    }
+
+    fun setSubtitleBackground(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setSubtitleBackground(enabled) }
+    }
+
+    fun setSubtitleDelayMs(delayMs: Long) {
+        viewModelScope.launch { settingsStore.setSubtitleDelayMs(delayMs) }
+    }
+
+    fun setDownloadStorageLimitBytes(bytes: Long?) {
+        viewModelScope.launch { settingsStore.setDownloadStorageLimitBytes(bytes) }
     }
 
     /** Read-only server URL for display in settings. */

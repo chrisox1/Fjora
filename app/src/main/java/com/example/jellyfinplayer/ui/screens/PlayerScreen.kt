@@ -202,7 +202,7 @@ fun PlayerScreen(
     // Register PiP-overlay action handlers so the play/pause/skip buttons in
     // the PiP overlay drive THIS ExoPlayer. Cleared on disposal so a stale
     // reference can't accidentally drive a released player.
-    DisposableEffect(player, nextEpisode, onPlayNext) {
+    DisposableEffect(player, nextEpisode, onPlayNext, activity, inPip) {
         val pip = com.example.jellyfinplayer.player.PipActionReceiver
         pip.activeIsPlaying = { player.isPlaying }
         pip.activeTogglePlayPause = {
@@ -228,6 +228,21 @@ fun PlayerScreen(
             player.pause()
             player.stop()
         }
+        pip.activeRefreshPip = {
+            if (inPip && activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching {
+                    activity.setPictureInPictureParams(
+                        com.example.jellyfinplayer.player.buildPipParamsForPlayer(
+                            activity = activity,
+                            aspectWidth = player.videoSize.width,
+                            aspectHeight = player.videoSize.height,
+                            isPlaying = player.isPlaying,
+                            hasNext = nextEpisode != null && onPlayNext != null
+                        )
+                    )
+                }
+            }
+        }
         pip.activePlayNext =
             if (nextEpisode != null && onPlayNext != null) {
                 {
@@ -249,6 +264,7 @@ fun PlayerScreen(
             pip.activeForward = null
             pip.activeStop = null
             pip.activePlayNext = null
+            pip.activeRefreshPip = null
         }
     }
 
@@ -440,9 +456,19 @@ fun PlayerScreen(
                 forceTranscode = force,
                 directPlayOnly = userSettings.directPlayOnly
             )
+            resolved?.let { r ->
+                com.example.jellyfinplayer.data.DiagnosticLog.record(
+                    context,
+                    "Exo resolved ${d.name}: playMethod=${r.playMethod}, bitrate=${effectiveBitrate ?: "original"}, forceTranscode=$force, directPlayOnly=${userSettings.directPlayOnly}"
+                )
+            }
             resolveError = null
         } catch (t: Throwable) {
             resolveError = t.message ?: "Couldn't get a playable stream from the server."
+            com.example.jellyfinplayer.data.DiagnosticLog.record(
+                context,
+                "Exo resolve failed for ${d.name}: ${t.message ?: t::class.java.simpleName}"
+            )
         }
     }
 
@@ -540,6 +566,10 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                com.example.jellyfinplayer.data.DiagnosticLog.record(
+                    context,
+                    "Exo playback error for ${item.name}: ${error.errorCodeName} ${error.message ?: ""}"
+                )
                 if (userSettings.directPlayOnly) {
                     resolveError = "Direct play failed for this file."
                     return
@@ -941,21 +971,38 @@ fun PlayerScreen(
                                 setApplyEmbeddedFontSizes(false)
                                 setStyle(
                                     androidx.media3.ui.CaptionStyleCompat(
-                                        android.graphics.Color.WHITE,
-                                        android.graphics.Color.TRANSPARENT,
+                                        subtitleAndroidColor(userSettings.subtitleColor),
+                                        if (userSettings.subtitleBackground)
+                                            android.graphics.Color.argb(180, 0, 0, 0)
+                                        else android.graphics.Color.TRANSPARENT,
                                         android.graphics.Color.TRANSPARENT,
                                         androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
                                         android.graphics.Color.BLACK,
                                         null
                                     )
                                 )
-                                setFractionalTextSize(0.06f)
+                                setFractionalTextSize(0.06f * userSettings.subtitleTextScale)
                             }
                         }
                     },
                     update = { pv ->
                         pv.useController = false
                         pv.resizeMode = fillMode.toResizeMode()
+                        pv.subtitleView?.apply {
+                            setStyle(
+                                androidx.media3.ui.CaptionStyleCompat(
+                                    subtitleAndroidColor(userSettings.subtitleColor),
+                                    if (userSettings.subtitleBackground)
+                                        android.graphics.Color.argb(180, 0, 0, 0)
+                                    else android.graphics.Color.TRANSPARENT,
+                                    android.graphics.Color.TRANSPARENT,
+                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                                    android.graphics.Color.BLACK,
+                                    null
+                                )
+                            )
+                            setFractionalTextSize(0.06f * userSettings.subtitleTextScale)
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )

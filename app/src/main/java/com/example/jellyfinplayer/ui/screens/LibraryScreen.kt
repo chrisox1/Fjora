@@ -84,6 +84,7 @@ fun LibraryScreen(
     var showServerInfoDialog by remember { mutableStateOf(false) }
     var refreshRequested by remember { mutableStateOf(false) }
     var wasRefreshing by remember { mutableStateOf(false) }
+    var showDeleteAllDownloadsConfirm by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
     val searchFocusRequester = remember { FocusRequester() }
@@ -230,24 +231,29 @@ fun LibraryScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text(
-                        serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } },
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { showServerInfoDialog = true }
-                    )
+                    Surface(
+                        onClick = { showServerInfoDialog = true },
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        contentColor = MaterialTheme.colorScheme.onBackground,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(
+                            serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } },
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
+                        )
+                    }
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        searchOpen = true
-                    }) {
+                    TopBarIconButton(onClick = { searchOpen = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Search")
                     }
                 },
                 actions = {
-                    IconButton(
+                    TopBarIconButton(
                         enabled = !refreshing,
                         onClick = {
                             refreshRequested = true
@@ -263,7 +269,7 @@ fun LibraryScreen(
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                     }
-                    IconButton(onClick = onSettingsClick) {
+                    TopBarIconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
@@ -391,6 +397,12 @@ fun LibraryScreen(
                                         )
                                     }
                                 } else {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        DownloadsManagementHeader(
+                                            downloads = downloads,
+                                            onDeleteAll = { showDeleteAllDownloadsConfirm = true }
+                                        )
+                                    }
                                     items(groupedDownloads, key = { entry -> entry.key }) { entry ->
                                         when (entry) {
                                             is DownloadEntry.Movie -> DownloadCard(
@@ -509,6 +521,32 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    if (showDeleteAllDownloadsConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDownloadsConfirm = false },
+            title = { Text("Delete all downloads?") },
+            text = {
+                Text(
+                    "This removes ${downloads.size} downloaded item" +
+                        if (downloads.size == 1) " from this device." else "s from this device."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteAllDownloadsConfirm = false
+                    downloads.forEach(onDeleteDownload)
+                }) {
+                    Text("Delete all", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDownloadsConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showServerInfoDialog) {
@@ -1100,6 +1138,83 @@ private fun LibraryTabs(
  * collide with a real Jellyfin item ID (those are GUIDs, no underscores).
  */
 internal const val DOWNLOADS_TAB_ID = "__downloads__"
+
+@Composable
+private fun TopBarIconButton(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 3.dp)
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)),
+        contentAlignment = Alignment.Center
+    ) {
+        IconButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun DownloadsManagementHeader(
+    downloads: List<com.example.jellyfinplayer.data.DownloadsStore.DownloadRecord>,
+    onDeleteAll: () -> Unit
+) {
+    val totalBytes = remember(downloads) {
+        downloads.sumOf { rec ->
+            rec.filePath
+                ?.let { runCatching { java.io.File(it).length() }.getOrNull() }
+                ?.takeIf { it > 0L }
+                ?: rec.sizeBytes.takeIf { it > 0L }
+                ?: 0L
+        }
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Downloads",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "${downloads.size} item${if (downloads.size == 1) "" else "s"} - ${formatDownloadStorage(totalBytes)} used",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onDeleteAll) {
+                Text("Delete all")
+            }
+        }
+    }
+}
+
+private fun formatDownloadStorage(bytes: Long): String {
+    if (bytes <= 0L) return "unknown storage"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return "%.0f KB".format(kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return "%.0f MB".format(mb)
+    return "%.1f GB".format(mb / 1024.0)
+}
 
 @Composable
 private fun LibraryTabChip(label: String, selected: Boolean, onClick: () -> Unit) {

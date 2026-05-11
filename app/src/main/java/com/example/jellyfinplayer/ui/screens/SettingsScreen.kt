@@ -25,8 +25,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.data.AuthStore
+import com.example.jellyfinplayer.data.DiagnosticLog
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,8 +42,11 @@ fun SettingsScreen(
     val settings = vm.settings.collectAsState().value
     val accounts = vm.accounts.collectAsState().value
     val activeId = vm.activeAccountId.collectAsState().value
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showQualityDialog by remember { mutableStateOf(false) }
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
+    var showSubtitleColorDialog by remember { mutableStateOf(false) }
+    var showDownloadLimitDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthStore.AccountRecord?>(null) }
     var showSignOutAllConfirm by remember { mutableStateOf(false) }
 
@@ -145,6 +150,31 @@ fun SettingsScreen(
                     onClick = { showSubtitleLanguageDialog = true }
                 )
             }
+            ClickableRow(
+                label = "Subtitle color",
+                value = subtitleColorLabel(settings.subtitleColor),
+                onClick = { showSubtitleColorDialog = true }
+            )
+            SliderRow(
+                label = "Subtitle size",
+                valueLabel = "${(settings.subtitleTextScale * 100).roundToInt()}%",
+                value = settings.subtitleTextScale,
+                valueRange = 0.75f..1.4f,
+                onValueChange = { vm.setSubtitleTextScale(it) }
+            )
+            SliderRow(
+                label = "Subtitle sync",
+                valueLabel = subtitleDelayLabel(settings.subtitleDelayMs),
+                value = settings.subtitleDelayMs.toFloat(),
+                valueRange = -5_000f..5_000f,
+                onValueChange = { vm.setSubtitleDelayMs((it / 250f).roundToInt() * 250L) }
+            )
+            ToggleRow(
+                label = "Subtitle background",
+                description = "Add a dark backing behind subtitle text for bright scenes.",
+                checked = settings.subtitleBackground,
+                onCheckedChange = { vm.setSubtitleBackground(it) }
+            )
             ToggleRow(
                 label = "Always transcode",
                 description = "Use server-side transcoding for every video. Fixes " +
@@ -191,6 +221,36 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(32.dp))
 
+            SectionLabel("Downloads")
+            ClickableRow(
+                label = "Storage limit",
+                value = downloadLimitLabel(settings.downloadStorageLimitBytes),
+                onClick = { showDownloadLimitDialog = true }
+            )
+            Text(
+                "When the limit is reached, new downloads are blocked until space is freed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
+
+            Spacer(Modifier.height(32.dp))
+
+            SectionLabel("Diagnostics")
+            ClickableRow(
+                label = "Export diagnostic log",
+                value = "Share",
+                onClick = { exportDiagnostics(context) }
+            )
+            Text(
+                "Includes device and playback diagnostics, not passwords or access tokens.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
+
+            Spacer(Modifier.height(32.dp))
+
             // Destructive: sign out of every account at once. The single-
             // account "delete this account" lives on each account row above.
             Button(
@@ -232,6 +292,28 @@ fun SettingsScreen(
                 showSubtitleLanguageDialog = false
             },
             onDismiss = { showSubtitleLanguageDialog = false }
+        )
+    }
+
+    if (showSubtitleColorDialog) {
+        SubtitleColorDialog(
+            current = settings.subtitleColor,
+            onSelect = {
+                vm.setSubtitleColor(it)
+                showSubtitleColorDialog = false
+            },
+            onDismiss = { showSubtitleColorDialog = false }
+        )
+    }
+
+    if (showDownloadLimitDialog) {
+        DownloadLimitDialog(
+            current = settings.downloadStorageLimitBytes,
+            onSelect = {
+                vm.setDownloadStorageLimitBytes(it)
+                showDownloadLimitDialog = false
+            },
+            onDismiss = { showDownloadLimitDialog = false }
         )
     }
 
@@ -556,6 +638,140 @@ private val subtitleLanguageOptions = listOf(
 
 private fun subtitleLanguageLabel(code: String?): String =
     subtitleLanguageOptions.firstOrNull { it.first == code }?.second ?: "Any available"
+
+private fun subtitleDelayLabel(delayMs: Long): String = when {
+    delayMs == 0L -> "0 ms"
+    delayMs > 0L -> "+${delayMs} ms"
+    else -> "${delayMs} ms"
+}
+
+private fun exportDiagnostics(ctx: android.content.Context) {
+    runCatching {
+        val file = DiagnosticLog.exportFile(ctx)
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            ctx,
+            "${ctx.packageName}.fileprovider",
+            file
+        )
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        ctx.startActivity(android.content.Intent.createChooser(intent, "Export diagnostics"))
+    }.onFailure {
+        android.widget.Toast.makeText(
+            ctx,
+            "Couldn't export diagnostics: ${it.message}",
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
+}
+
+private val downloadLimitOptions = listOf(
+    null to "No limit",
+    2L * 1024 * 1024 * 1024 to "2 GB",
+    5L * 1024 * 1024 * 1024 to "5 GB",
+    10L * 1024 * 1024 * 1024 to "10 GB",
+    25L * 1024 * 1024 * 1024 to "25 GB",
+    50L * 1024 * 1024 * 1024 to "50 GB"
+)
+
+private fun downloadLimitLabel(bytes: Long?): String =
+    downloadLimitOptions.firstOrNull { it.first == bytes }?.second ?: "Custom"
+
+@Composable
+private fun DownloadLimitDialog(
+    current: Long?,
+    onSelect: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Download storage limit", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                downloadLimitOptions.forEach { (value, label) ->
+                    val selected = value == current
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(value) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected, onClick = { onSelect(value) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun SliderRow(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp, horizontal = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(
+                valueLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Slider(
+            value = value.coerceIn(valueRange.start, valueRange.endInclusive),
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun SubtitleColorDialog(
+    current: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Subtitle color", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                subtitleColorOptions.forEach { (value, label) ->
+                    val selected = value == current
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(value) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected, onClick = { onSelect(value) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    )
+}
 
 @Composable
 private fun SubtitleLanguageDialog(

@@ -25,6 +25,8 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.data.DownloadsStore.DownloadRecord
 import com.example.jellyfinplayer.ui.components.CastRow
+import com.example.jellyfinplayer.ui.components.DownloadStatus
+import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
 
 /**
  * Detail screen for a downloaded movie or episode. Fetches full item metadata
@@ -68,6 +70,7 @@ fun DownloadedDetailScreen(
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val downloadStatus = rememberDownloadStatus(record.downloadId)
 
     Scaffold(
         containerColor = cs.background,
@@ -161,6 +164,31 @@ fun DownloadedDetailScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+            if (downloadStatus.state == DownloadStatus.State.Failed) {
+                OutlinedButton(
+                    onClick = {
+                        val retryItem = serverItem ?: buildFallbackItem(record)
+                        onDelete(record)
+                        startDownload(
+                            ctx = context,
+                            vm = vm,
+                            item = retryItem,
+                            url = vm.downloadUrl(retryItem, record.maxBitrate),
+                            isOriginal = record.isOriginalQuality,
+                            maxBitrate = record.maxBitrate
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .tabletContentWidth()
+                        .align(Alignment.CenterHorizontally)
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text("Retry download", fontWeight = FontWeight.SemiBold)
                 }
             }
 
