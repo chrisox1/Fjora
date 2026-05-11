@@ -146,6 +146,7 @@ fun MpvPlayerScreen(
     var isNavigatingAway by remember { mutableStateOf(false) }
     var selectedAudioIndex by remember { mutableStateOf<Int?>(null) }
     var selectedSubtitleIndex by remember { mutableStateOf<Int?>(null) }
+    var resumeSurfaceRefreshKey by remember { mutableIntStateOf(0) }
     // Custom Compose subtitle renderer state — used for text-based subs (SRT, ASS, VTT)
     // because the jdtech mpv-android build doesn't include libass so MPV can't render them.
     // Image-based subs (PGS, DVDSUB) still go through MPV's internal sid selector.
@@ -223,6 +224,7 @@ fun MpvPlayerScreen(
                 controller.systemBarsBehavior =
                     WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 controller.hide(WindowInsetsCompat.Type.systemBars())
+                if (fileLoaded) resumeSurfaceRefreshKey += 1
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -368,7 +370,7 @@ fun MpvPlayerScreen(
         }
     }
 
-    LaunchedEffect(mpvReady, surfaceReady, sourceUrl) {
+    LaunchedEffect(mpvReady, surfaceReady, sourceUrl, resumeSurfaceRefreshKey) {
         val source = sourceUrl ?: return@LaunchedEffect
         if (!mpvReady || !surfaceReady) return@LaunchedEffect
         if (fileLoaded) {
@@ -377,24 +379,7 @@ fun MpvPlayerScreen(
             // Seek to the current time-pos after the VO has finished re-initializing on
             // the new surface — this forces MPV to decode and render the paused frame.
             // We retry a few times because time-pos may still be null/0 right after attach.
-            runCatching {
-                var rendered = false
-                for (attempt in 1..5) {
-                    delay(200)
-                    val pos = MPVLib.getPropertyDouble("time-pos")
-                    if (pos != null && pos >= 0) {
-                        MPVLib.command(arrayOf("seek", pos.toString(), "absolute+exact"))
-                        rendered = true
-                        break
-                    }
-                }
-                if (!rendered) {
-                    // Last resort: briefly unpause so MPV renders at least one frame.
-                    MPVLib.setPropertyBoolean("pause", false)
-                    delay(150)
-                    MPVLib.setPropertyBoolean("pause", true)
-                }
-            }
+            runCatching { refreshMpvVideoOutput() }
             return@LaunchedEffect
         }
         fileLoaded = true
@@ -534,9 +519,10 @@ fun MpvPlayerScreen(
                 .getOrDefault(false)
         }
         pip.activeTogglePlayPause = {
-            runCatching {
+            subScope.launch {
                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
-                MPVLib.setPropertyBoolean("pause", !paused)
+                if (paused) refreshMpvVideoOutput()
+                runCatching { MPVLib.setPropertyBoolean("pause", !paused) }
             }
         }
         pip.activeRewind = {
@@ -866,9 +852,10 @@ fun MpvPlayerScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) {
-                            runCatching {
+                            subScope.launch {
                                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
-                                MPVLib.setPropertyBoolean("pause", !paused)
+                                if (paused) refreshMpvVideoOutput()
+                                runCatching { MPVLib.setPropertyBoolean("pause", !paused) }
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -998,10 +985,14 @@ fun MpvPlayerScreen(
         // which is not present in the jdtech mpv-android build.
         val activeCue = currentSubCue
         if (activeCue != null) {
-            val subtitleFontSize = if (inPip) 12.sp else 24.sp
-            val scaledSubtitleFontSize = (subtitleFontSize.value * settings.subtitleTextScale).sp
-            val subtitleLineHeight = if (inPip) 15.sp else 30.sp
-            val scaledSubtitleLineHeight = (subtitleLineHeight.value * settings.subtitleTextScale).sp
+            val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+            val baseSubtitleSp = if (inPip) {
+                (screenHeightDp * 0.04f).coerceIn(12f, 16f)
+            } else {
+                (screenHeightDp * 0.04f).coerceIn(16f, 36f)
+            }
+            val scaledSubtitleFontSize = (baseSubtitleSp * settings.subtitleTextScale).sp
+            val scaledSubtitleLineHeight = (baseSubtitleSp * 1.25f * settings.subtitleTextScale).sp
             val subtitleBottomPadding = if (inPip) 10.dp else 42.dp
             val subtitleSidePadding = if (inPip) 8.dp else 24.dp
             Box(
@@ -1206,6 +1197,20 @@ private fun applyMpvFillMode(mode: MpvFillMode) {
         MpvFillMode.ZOOM -> {
             MPVLib.setPropertyString("panscan", "0")
             MPVLib.setPropertyString("video-zoom", "0.22")
+        }
+    }
+}
+
+private suspend fun refreshMpvVideoOutput() {
+    runCatching { MPVLib.setOptionString("force-window", "yes") }
+    runCatching { MPVLib.setOptionString("vo", "gpu") }
+    runCatching { MPVLib.setPropertyString("vo", "gpu") }
+    repeat(5) {
+        delay(120)
+        val pos = runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull()
+        if (pos != null && pos >= 0.0) {
+            runCatching { MPVLib.command(arrayOf("seek", pos.toString(), "absolute+exact")) }
+            return
         }
     }
 }

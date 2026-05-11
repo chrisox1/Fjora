@@ -45,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +70,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.PlayerPresence
 import com.example.jellyfinplayer.api.MediaItem
@@ -114,6 +117,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val audioManager = remember(context) {
         context.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -512,6 +516,20 @@ fun PlayerScreen(
     }
 
     // Player listener — stop/progress reporting and the fallback chain.
+    DisposableEffect(lifecycleOwner, player, inPip) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !inPip &&
+                player.playbackState == Player.STATE_READY
+            ) {
+                runCatching {
+                    player.seekTo(player.currentPosition.coerceAtLeast(0L))
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(size: androidx.media3.common.VideoSize) {
@@ -981,7 +999,12 @@ fun PlayerScreen(
                                         null
                                     )
                                 )
-                                setFractionalTextSize(0.06f * userSettings.subtitleTextScale)
+                                setFractionalTextSize(
+                                    clampedExoSubtitleFraction(
+                                        viewHeightPx = height.takeIf { it > 0 } ?: 720,
+                                        scale = userSettings.subtitleTextScale
+                                    )
+                                )
                             }
                         }
                     },
@@ -1001,7 +1024,12 @@ fun PlayerScreen(
                                     null
                                 )
                             )
-                            setFractionalTextSize(0.06f * userSettings.subtitleTextScale)
+                            setFractionalTextSize(
+                                clampedExoSubtitleFraction(
+                                    viewHeightPx = pv.height.takeIf { it > 0 } ?: 720,
+                                    scale = userSettings.subtitleTextScale
+                                )
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1574,6 +1602,13 @@ private fun subtitleLanguageAliases(language: String): Set<String> {
         "zho", "chi", "zh", "chinese" -> setOf("zho", "chi", "zh", "chinese")
         else -> setOf(language.lowercase())
     }
+}
+
+private fun clampedExoSubtitleFraction(viewHeightPx: Int, scale: Float): Float {
+    val density = android.content.res.Resources.getSystem().displayMetrics.scaledDensity
+        .takeIf { it > 0f } ?: 1f
+    val targetPx = (viewHeightPx * 0.04f * scale).coerceIn(16f * density, 36f * density)
+    return (targetPx / viewHeightPx.toFloat()).coerceIn(0f, 1f)
 }
 
 private fun formatMs(ms: Long): String {

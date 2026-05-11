@@ -231,29 +231,24 @@ fun LibraryScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Surface(
-                        onClick = { showServerInfoDialog = true },
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        contentColor = MaterialTheme.colorScheme.onBackground,
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Text(
-                            serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } },
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
-                        )
-                    }
+                    Text(
+                        serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } },
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { showServerInfoDialog = true }
+                    )
                 },
                 navigationIcon = {
-                    TopBarIconButton(onClick = { searchOpen = true }) {
+                    IconButton(onClick = {
+                        searchOpen = true
+                    }) {
                         Icon(Icons.Default.Search, contentDescription = "Search")
                     }
                 },
                 actions = {
-                    TopBarIconButton(
+                    IconButton(
                         enabled = !refreshing,
                         onClick = {
                             refreshRequested = true
@@ -269,7 +264,7 @@ fun LibraryScreen(
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
                     }
-                    TopBarIconButton(onClick = onSettingsClick) {
+                    IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
@@ -1138,30 +1133,6 @@ private fun LibraryTabs(
  * collide with a real Jellyfin item ID (those are GUIDs, no underscores).
  */
 internal const val DOWNLOADS_TAB_ID = "__downloads__"
-
-@Composable
-private fun TopBarIconButton(
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 3.dp)
-            .size(42.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)),
-        contentAlignment = Alignment.Center
-    ) {
-        IconButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            content()
-        }
-    }
-}
 
 @Composable
 private fun DownloadsManagementHeader(
