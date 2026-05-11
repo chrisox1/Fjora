@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
+import com.example.jellyfinplayer.QuickConnectState
 import com.example.jellyfinplayer.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,21 +52,31 @@ fun LoginScreen(
     var pass by remember { mutableStateOf("") }
     var passVisible by remember { mutableStateOf(false) }
     val state = vm.uiState.collectAsState().value
+    val quickState = vm.quickConnectState.collectAsState().value
     val cs = MaterialTheme.colorScheme
 
     val userFocus = remember { FocusRequester() }
     val passFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    val canSubmit = state !is UiState.Loading && server.isNotBlank() && user.isNotBlank()
+    val fullServerUrl = "$scheme://${server.trim()}"
+    val quickBusy = quickState is QuickConnectState.Starting ||
+        quickState is QuickConnectState.Waiting ||
+        quickState is QuickConnectState.Completing
+    val canSubmit = state !is UiState.Loading &&
+        !quickBusy &&
+        server.isNotBlank() &&
+        user.isNotBlank()
+    val canQuickConnect = state !is UiState.Loading &&
+        !quickBusy &&
+        server.isNotBlank()
     val submit: () -> Unit = {
         if (canSubmit) {
             keyboard?.hide()
             // Compose the full URL from the scheme picker + host field. The
             // repository's normalizer will still handle trailing slashes,
             // bare IPs, etc.
-            val fullUrl = "$scheme://${server.trim()}"
-            vm.login(fullUrl, user.trim(), pass)
+            vm.login(fullServerUrl, user.trim(), pass)
         }
     }
 
@@ -244,6 +256,18 @@ fun LoginScreen(
                 }
             }
 
+            Spacer(Modifier.height(14.dp))
+
+            QuickConnectPanel(
+                state = quickState,
+                enabled = canQuickConnect,
+                onStart = {
+                    keyboard?.hide()
+                    vm.startQuickConnect(fullServerUrl)
+                },
+                onCancel = { vm.cancelQuickConnect() }
+            )
+
             if (state is UiState.Error) {
                 Spacer(Modifier.height(16.dp))
                 Text(
@@ -253,5 +277,109 @@ fun LoginScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun QuickConnectPanel(
+    state: QuickConnectState,
+    enabled: Boolean,
+    onStart: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = cs.surfaceVariant.copy(alpha = 0.55f),
+        contentColor = cs.onSurface,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Link,
+                    contentDescription = null,
+                    tint = cs.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Quick Connect",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Sign in from another Jellyfin app or the web dashboard. No password is entered on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            when (state) {
+                QuickConnectState.Idle -> {
+                    OutlinedButton(
+                        onClick = onStart,
+                        enabled = enabled,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Use Quick Connect", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                QuickConnectState.Starting -> {
+                    QuickConnectProgress("Creating secure code...")
+                }
+                is QuickConnectState.Waiting -> {
+                    Text(
+                        state.code,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = cs.primary,
+                        modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+                    )
+                    Text(
+                        "Open Jellyfin on a signed-in device, go to Quick Connect, and enter this code.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = onCancel) {
+                        Text("Cancel")
+                    }
+                }
+                QuickConnectState.Completing -> {
+                    QuickConnectProgress("Authorized. Signing in...")
+                }
+                is QuickConnectState.Error -> {
+                    Text(
+                        state.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.error
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = onStart,
+                        enabled = enabled,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Try again", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickConnectProgress(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            strokeWidth = 2.dp
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall)
     }
 }

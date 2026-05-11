@@ -10,6 +10,11 @@ data class AuthRequest(
 )
 
 @Serializable
+data class QuickConnectAuthRequest(
+    @SerialName("Secret") val secret: String
+)
+
+@Serializable
 data class AuthResponse(
     @SerialName("AccessToken") val accessToken: String,
     @SerialName("ServerId") val serverId: String,
@@ -25,6 +30,13 @@ data class JellyfinUser(
 @Serializable
 data class SystemInfo(
     @SerialName("ServerName") val serverName: String? = null
+)
+
+@Serializable
+data class QuickConnectResult(
+    @SerialName("Authenticated") val authenticated: Boolean = false,
+    @SerialName("Secret") val secret: String = "",
+    @SerialName("Code") val code: String = ""
 )
 
 data class MediaSegment(

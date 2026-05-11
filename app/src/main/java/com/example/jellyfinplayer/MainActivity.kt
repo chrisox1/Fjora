@@ -541,6 +541,16 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                         else -> Screen.Library
                     }
                 },
+                onLocalPlaybackNeedsMpv = s.localFilePath?.let { path ->
+                    {
+                        screen = Screen.MpvPlayer(
+                            item = s.item,
+                            series = s.series,
+                            movieDetail = s.movieDetail,
+                            localFilePath = path
+                        )
+                    }
+                },
                 localFilePath = s.localFilePath
             )
             is Screen.MpvPlayer -> MpvPlayerScreen(

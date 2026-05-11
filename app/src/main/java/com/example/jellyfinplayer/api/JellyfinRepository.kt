@@ -181,6 +181,50 @@ class JellyfinRepository {
         }
     }
 
+    suspend fun initiateQuickConnect(): QuickConnectResult {
+        val a = api ?: error("Call configure() first")
+        try {
+            val enabled = a.getQuickConnectEnabled()
+            if (!enabled) {
+                throw IllegalStateException("Quick Connect is disabled on this Jellyfin server.")
+            }
+            return a.initiateQuickConnect(authHeader())
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                throw IllegalStateException("Quick Connect is disabled on this Jellyfin server.", e)
+            }
+            throw IllegalStateException("Quick Connect failed (HTTP ${e.code()}).", e)
+        } catch (e: java.net.UnknownHostException) {
+            throw IllegalStateException("Couldn't reach that server. Check the URL and that you're on the right network.", e)
+        } catch (e: java.net.ConnectException) {
+            throw IllegalStateException("Couldn't connect to the server. Is it running on that port?", e)
+        } catch (e: javax.net.ssl.SSLException) {
+            throw IllegalStateException("HTTPS connection failed. The server's certificate may be invalid.", e)
+        } catch (e: java.net.SocketTimeoutException) {
+            throw IllegalStateException("Server didn't respond in time. It may be slow or unreachable.", e)
+        } catch (e: java.io.IOException) {
+            throw IllegalStateException("Network error: ${e.message ?: "couldn't reach the server"}", e)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalStateException("Server URL doesn't look right. Try \"http://your-server:8096\".", e)
+        }
+    }
+
+    suspend fun getQuickConnectState(secret: String): QuickConnectResult {
+        val a = api ?: error("Call configure() first")
+        return a.getQuickConnectState(secret)
+    }
+
+    suspend fun authenticateWithQuickConnect(secret: String): AuthResponse {
+        val a = api ?: error("Call configure() first")
+        val response = a.authenticateWithQuickConnect(
+            authHeader(),
+            QuickConnectAuthRequest(secret)
+        )
+        accessToken = response.accessToken
+        userId = response.user.id
+        return response
+    }
+
     suspend fun loadLibrary(): List<MediaItem> = mapAuthErrors {
         val a = api ?: error("Call configure() first")
         a.getMoviesAndSeries(userId, authHeader()).items

@@ -101,6 +101,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
     nextEpisode: MediaItem? = null,
     onPlayNext: ((MediaItem) -> Unit)? = null,
+    onLocalPlaybackNeedsMpv: (() -> Unit)? = null,
     /**
      * Local file path for offline playback. When non-null, the player
      * skips the entire server-side resolution pipeline (no PlaybackInfo
@@ -294,7 +295,9 @@ fun PlayerScreen(
     val lastGoodPositionMs = remember { mutableStateOf(0L) }
     val currentNextEpisode by rememberUpdatedState(nextEpisode)
     val currentOnPlayNext by rememberUpdatedState(onPlayNext)
+    val currentOnLocalPlaybackNeedsMpv by rememberUpdatedState(onLocalPlaybackNeedsMpv)
     val currentSubtitleIndex by rememberUpdatedState(selectedSubtitleIndex)
+    var localSeekFallbackTriggered by remember { mutableStateOf(false) }
 
     var playbackAttempt by remember { mutableStateOf(0) }
     val maxAttempts = 4
@@ -312,6 +315,7 @@ fun PlayerScreen(
         resolveError = null
         startReported = false
         lastGoodPositionMs.value = 0L
+        localSeekFallbackTriggered = false
         playbackAttempt = 0
         selectedAudioIndex = null
         selectedSubtitleIndex = null
@@ -672,6 +676,20 @@ fun PlayerScreen(
              * signal regardless of duration. Better to fall back early.
              */
             fun checkSeekabilityAndFallback() {
+                if (localFilePath != null) {
+                    if (localSeekFallbackTriggered) return
+                    if (player.currentTimeline.isEmpty) return
+                    if (!player.isCurrentMediaItemSeekable) {
+                        localSeekFallbackTriggered = true
+                        android.widget.Toast.makeText(
+                            context,
+                            "Switching to mpv for better seeking",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        currentOnLocalPlaybackNeedsMpv?.invoke()
+                    }
+                    return
+                }
                 val r = resolved ?: return
                 if (userSettings.directPlayOnly) return
                 if (playbackAttempt != 0) return

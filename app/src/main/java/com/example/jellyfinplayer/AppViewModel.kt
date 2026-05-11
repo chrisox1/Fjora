@@ -11,6 +11,9 @@ import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DownloadsStore
 import com.example.jellyfinplayer.data.SettingsStore
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +31,14 @@ sealed class UiState {
     data object Idle : UiState()
     data object Loading : UiState()
     data class Error(val message: String) : UiState()
+}
+
+sealed class QuickConnectState {
+    data object Idle : QuickConnectState()
+    data object Starting : QuickConnectState()
+    data class Waiting(val code: String) : QuickConnectState()
+    data object Completing : QuickConnectState()
+    data class Error(val message: String) : QuickConnectState()
 }
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -70,6 +81,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState
+    private val _quickConnectState = MutableStateFlow<QuickConnectState>(QuickConnectState.Idle)
+    val quickConnectState: StateFlow<QuickConnectState> = _quickConnectState
+    private var quickConnectJob: Job? = null
     private val _homeLoadInFlight = MutableStateFlow(false)
     val homeLoadInFlight: StateFlow<Boolean> = _homeLoadInFlight
 
@@ -295,6 +309,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun login(server: String, username: String, password: String) {
         if (server.isBlank() || username.isBlank()) return
+        cancelQuickConnect(resetState = true)
         _uiState.value = UiState.Loading
         viewModelScope.launch {
             try {
@@ -324,6 +339,66 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 _uiState.value = UiState.Error(t.message ?: "Login failed")
             }
         }
+    }
+
+    fun startQuickConnect(server: String) {
+        if (server.isBlank()) return
+        cancelQuickConnect(resetState = false)
+        quickConnectJob = viewModelScope.launch {
+            try {
+                _quickConnectState.value = QuickConnectState.Starting
+                val deviceId = store.getOrCreateDeviceId()
+                repo.configure(server, deviceId)
+                val started = repo.initiateQuickConnect()
+                if (started.code.isBlank() || started.secret.isBlank()) {
+                    throw IllegalStateException("Server did not return a Quick Connect code.")
+                }
+                _quickConnectState.value = QuickConnectState.Waiting(started.code)
+
+                repeat(36) {
+                    delay(5_000)
+                    val state = repo.getQuickConnectState(started.secret)
+                    if (state.authenticated) {
+                        _quickConnectState.value = QuickConnectState.Completing
+                        _uiState.value = UiState.Loading
+                        val resp = repo.authenticateWithQuickConnect(started.secret)
+                        store.addAccount(
+                            server = repo.getServerUrl(),
+                            token = resp.accessToken,
+                            userId = resp.user.id,
+                            userName = resp.user.name
+                        )
+                        _userName.value = resp.user.name
+                        _serverName.value = serverDisplayName(repo.getServerUrl())
+                        _library.value = emptyList()
+                        _continueWatching.value = emptyList()
+                        _nextUp.value = emptyList()
+                        _searchResults.value = emptyList()
+                        _isLoggedIn.value = true
+                        _quickConnectState.value = QuickConnectState.Idle
+                        _uiState.value = UiState.Idle
+                        loadHome()
+                        return@launch
+                    }
+                }
+                _quickConnectState.value = QuickConnectState.Error(
+                    "Quick Connect code expired. Start a new code and try again."
+                )
+            } catch (_: CancellationException) {
+                // User started a new Quick Connect attempt or closed the panel.
+            } catch (t: Throwable) {
+                _uiState.value = UiState.Idle
+                _quickConnectState.value = QuickConnectState.Error(
+                    t.message ?: "Quick Connect failed"
+                )
+            }
+        }
+    }
+
+    fun cancelQuickConnect(resetState: Boolean = true) {
+        quickConnectJob?.cancel()
+        quickConnectJob = null
+        if (resetState) _quickConnectState.value = QuickConnectState.Idle
     }
 
     /** Switch to a previously-saved account by id. */

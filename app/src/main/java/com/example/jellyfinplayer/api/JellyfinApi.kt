@@ -16,6 +16,25 @@ interface JellyfinApi {
         @Body body: AuthRequest
     ): AuthResponse
 
+    @GET("QuickConnect/Enabled")
+    suspend fun getQuickConnectEnabled(): Boolean
+
+    @POST("QuickConnect/Initiate")
+    suspend fun initiateQuickConnect(
+        @Header("Authorization") authHeader: String
+    ): QuickConnectResult
+
+    @GET("QuickConnect/Connect")
+    suspend fun getQuickConnectState(
+        @Query("secret") secret: String
+    ): QuickConnectResult
+
+    @POST("Users/AuthenticateWithQuickConnect")
+    suspend fun authenticateWithQuickConnect(
+        @Header("Authorization") authHeader: String,
+        @Body body: QuickConnectAuthRequest
+    ): AuthResponse
+
     @GET("System/Info")
     suspend fun getSystemInfo(
         @Header("Authorization") authHeader: String
