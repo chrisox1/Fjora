@@ -56,7 +56,7 @@ private sealed class Screen {
      * it's a movie and back goes to the library.
      */
     data class MovieDetail(val movie: MediaItem, val series: MediaItem? = null) : Screen()
-    data class Episodes(val series: MediaItem) : Screen()
+    data class Episodes(val series: MediaItem, val initialSeason: Int? = null) : Screen()
     data class PersonDetail(val person: Person, val previous: Screen) : Screen()
 
     /**
@@ -277,11 +277,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series)
+                s.series != null -> Screen.Episodes(s.series, s.item.seasonNumber)
                 else -> Screen.Library
             }
             is Screen.MovieDetail -> when {
-                s.series != null -> Screen.Episodes(s.series)
+                s.series != null -> Screen.Episodes(s.series, s.movie.seasonNumber)
                 else -> Screen.Library
             }
             is Screen.Episodes -> Screen.Library
@@ -312,7 +312,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series)
+                s.series != null -> Screen.Episodes(s.series, s.item.seasonNumber)
                 else -> Screen.Library
             }
             is Screen.Library -> Screen.Library
@@ -466,7 +466,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 vm = vm,
                 item = s.movie,
                 onBack = {
-                    screen = if (s.series != null) Screen.Episodes(s.series)
+                    screen = if (s.series != null) Screen.Episodes(s.series, s.movie.seasonNumber)
                              else Screen.Library
                 },
                 onPlay = { item ->
@@ -488,6 +488,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
             is Screen.Episodes -> EpisodesScreen(
                 vm = vm,
                 series = s.series,
+                initialSeason = s.initialSeason,
                 onBack = { screen = Screen.Library },
                 onEpisodeClick = { episode ->
                     screen = Screen.MovieDetail(episode, series = s.series)
@@ -537,7 +538,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                         // detail screen for downloaded items.
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(s.series)
+                        s.series != null -> Screen.Episodes(s.series, s.movieDetail?.seasonNumber ?: s.item.seasonNumber)
                         else -> Screen.Library
                     }
                 },
@@ -570,7 +571,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     screen = when {
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(s.series)
+                        s.series != null -> Screen.Episodes(s.series, s.movieDetail?.seasonNumber ?: s.item.seasonNumber)
                         else -> Screen.Library
                     }
                 }

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
@@ -117,6 +118,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val view = LocalView.current
+    val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val audioManager = remember(context) {
         context.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
@@ -230,7 +232,6 @@ fun PlayerScreen(
         pip.activeStop = {
             player.playWhenReady = false
             player.pause()
-            player.stop()
         }
         pip.activeRefreshPip = {
             if (inPip && activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -951,6 +952,17 @@ fun PlayerScreen(
         "credits",
         "outro"
     )
+    val exoSubtitleFraction = remember(
+        configuration.screenHeightDp,
+        inPip,
+        userSettings.subtitleTextScale
+    ) {
+        clampedExoSubtitleFraction(
+            screenHeightDp = configuration.screenHeightDp,
+            scale = userSettings.subtitleTextScale,
+            inPip = inPip
+        )
+    }
 
     Box(
         Modifier
@@ -1000,10 +1012,7 @@ fun PlayerScreen(
                                     )
                                 )
                                 setFractionalTextSize(
-                                    clampedExoSubtitleFraction(
-                                        viewHeightPx = height.takeIf { it > 0 } ?: 720,
-                                        scale = userSettings.subtitleTextScale
-                                    )
+                                    exoSubtitleFraction
                                 )
                             }
                         }
@@ -1025,10 +1034,7 @@ fun PlayerScreen(
                                 )
                             )
                             setFractionalTextSize(
-                                clampedExoSubtitleFraction(
-                                    viewHeightPx = pv.height.takeIf { it > 0 } ?: 720,
-                                    scale = userSettings.subtitleTextScale
-                                )
+                                exoSubtitleFraction
                             )
                         }
                     },
@@ -1308,6 +1314,7 @@ fun PlayerScreen(
                 onClick = { player.seekTo(activeIntroSegment.endMs) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .zIndex(5f)
                     .navigationBarsPadding()
                     .padding(end = 20.dp, bottom = 96.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White)
@@ -1325,6 +1332,7 @@ fun PlayerScreen(
                 onClick = { isNavigatingAway = true; creditsPlayNext(creditsNext) },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .zIndex(5f)
                     .navigationBarsPadding()
                     .padding(end = 20.dp, bottom = 96.dp)
             ) {
@@ -1604,11 +1612,16 @@ private fun subtitleLanguageAliases(language: String): Set<String> {
     }
 }
 
-private fun clampedExoSubtitleFraction(viewHeightPx: Int, scale: Float): Float {
-    val density = android.content.res.Resources.getSystem().displayMetrics.scaledDensity
-        .takeIf { it > 0f } ?: 1f
-    val targetPx = (viewHeightPx * 0.04f * scale).coerceIn(16f * density, 36f * density)
-    return (targetPx / viewHeightPx.toFloat()).coerceIn(0f, 1f)
+private fun clampedExoSubtitleFraction(
+    screenHeightDp: Int,
+    scale: Float,
+    inPip: Boolean
+): Float {
+    val safeHeight = screenHeightDp.coerceAtLeast(1).toFloat()
+    val minSp = if (inPip) 16f else 16f
+    val maxSp = if (inPip) 22f else 36f
+    val targetSp = (safeHeight * 0.04f * scale).coerceIn(minSp, maxSp)
+    return (targetSp / safeHeight).coerceIn(0f, 1f)
 }
 
 private fun formatMs(ms: Long): String {

@@ -39,6 +39,7 @@ import com.example.jellyfinplayer.ui.components.CastRow
 fun EpisodesScreen(
     vm: AppViewModel,
     series: MediaItem,
+    initialSeason: Int? = null,
     onBack: () -> Unit,
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit = {}
@@ -76,7 +77,9 @@ fun EpisodesScreen(
             // Smart default: jump to the season containing the next unwatched
             // episode so the user doesn't always have to scroll back to where
             // they were. Falls back to the lowest-numbered non-special season.
-            selectedSeason = list.firstOrNull {
+            selectedSeason = initialSeason?.takeIf { wanted ->
+                list.any { it.seasonNumber == wanted }
+            } ?: list.firstOrNull {
                 val played = it.userData?.played == true
                 val started = (it.userData?.playbackPositionTicks ?: 0L) > 0L
                 !played || started
