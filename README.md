@@ -49,23 +49,15 @@ Screenshots:
 - Optional bundled mpv player for downloaded files that ExoPlayer cannot seek
   or play reliably.
 - Open downloaded files in another installed video app.
+- Quickconnect
 
 ## Known limitations
 
 - Chromecast is not implemented.
-- Music libraries are not a target for this app and will not be added.
-- Transcoded downloads can be unreliable and slow
-- Downloaded files show detected local container format and size. The bitrate
-  label for transcoded downloads is the requested preset, not a verified
-  post-download media analysis.
-- ExoPlayer may still fail to seek some malformed or poorly indexed files.
-  Use mpv for downloads or open the file in another app as a fallback.
+- Music libraries are not a target for this app currently.
 - Direct-play-only mode can fail on files or servers that cannot provide a
   playable original stream. It intentionally does not fall back to direct
   stream or transcoding.
-- First install and loading can be slow due to caching, but becomes smooth after a few minutes.
-- Not tested on tablets.
-- Downloads dont download external subtitles.
 
 ## Upcoming work
 

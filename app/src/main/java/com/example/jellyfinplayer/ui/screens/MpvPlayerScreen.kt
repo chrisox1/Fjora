@@ -987,9 +987,9 @@ fun MpvPlayerScreen(
         if (activeCue != null) {
             val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
             val baseSubtitleSp = if (inPip) {
-                (screenHeightDp * 0.04f).coerceIn(16f, 22f)
+                (screenHeightDp * 0.04f).coerceIn(14f, 20f)
             } else {
-                (screenHeightDp * 0.04f).coerceIn(16f, 36f)
+                (screenHeightDp * 0.05f).coerceIn(17f, 36f)
             }
             val scaledSubtitleFontSize = (baseSubtitleSp * settings.subtitleTextScale).sp
             val scaledSubtitleLineHeight = (baseSubtitleSp * 1.25f * settings.subtitleTextScale).sp

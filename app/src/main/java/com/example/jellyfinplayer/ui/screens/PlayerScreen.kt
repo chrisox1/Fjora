@@ -1618,9 +1618,10 @@ internal fun clampedExoSubtitleFraction(
     inPip: Boolean
 ): Float {
     val safeHeight = screenHeightDp.coerceAtLeast(1).toFloat()
-    val minSp = if (inPip) 16f else 16f
-    val maxSp = if (inPip) 22f else 36f
-    val targetSp = (safeHeight * 0.04f * scale).coerceIn(minSp, maxSp)
+    val minSp = if (inPip) 14f else 17f
+    val maxSp = if (inPip) 20f else 36f
+    val fraction = if (inPip) 0.04f else 0.05f
+    val targetSp = (safeHeight * fraction * scale).coerceIn(minSp, maxSp)
     return (targetSp / safeHeight).coerceIn(0f, 1f)
 }
 
