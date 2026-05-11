@@ -169,7 +169,7 @@ fun PlayerScreen(
             .setConnectTimeoutMs(30_000)
             .setReadTimeoutMs(30_000)
             .setAllowCrossProtocolRedirects(true)
-            .setUserAgent("Fjora/0.1.0 (Android)")
+            .setUserAgent("Fjora/0.1.1 (Android)")
         // Wrap the HTTP factory in a DefaultDataSource. This lets the player
         // handle BOTH:
         //   - http(s):// URIs (server streaming, transcoded HLS) — go through

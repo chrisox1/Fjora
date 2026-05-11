@@ -72,7 +72,7 @@ class JellyfinRepository {
     private var api: JellyfinApi? = null
 
     private val clientName = "Fjora"
-    private val clientVersion = "0.1.0"
+    private val clientVersion = "0.1.1"
     private val deviceName: String = sanitize(android.os.Build.MODEL ?: "Android")
 
     private val json = Json {
