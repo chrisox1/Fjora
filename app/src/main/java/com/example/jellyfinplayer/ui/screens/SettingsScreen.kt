@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
+import com.example.jellyfinplayer.data.AppThemeColor
 import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DiagnosticLog
 import com.example.jellyfinplayer.data.HomeHeroSource
@@ -45,6 +46,7 @@ fun SettingsScreen(
     val activeId = vm.activeAccountId.collectAsState().value
     val context = androidx.compose.ui.platform.LocalContext.current
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showThemeColorDialog by remember { mutableStateOf(false) }
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showSubtitleColorDialog by remember { mutableStateOf(false) }
     var showHeroSourceDialog by remember { mutableStateOf(false) }
@@ -126,24 +128,38 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Playback section
-            SectionLabel("Playback")
+            SectionLabel("Appearance")
             ClickableRow(
-                label = "Default quality",
-                value = formatBitrate(settings.defaultMaxBitrate),
-                onClick = { showQualityDialog = true }
-            )
-            ToggleRow(
-                label = "Resume from last position",
-                description = "When off, items always start from the beginning.",
-                checked = settings.autoResume,
-                onCheckedChange = { vm.setAutoResume(it) }
+                label = "Theme color",
+                value = settings.appThemeColor.label,
+                onClick = { showThemeColorDialog = true }
             )
             ClickableRow(
                 label = "Home card",
                 value = settings.homeHeroSource.label,
                 onClick = { showHeroSourceDialog = true }
             )
+
+            Spacer(Modifier.height(24.dp))
+
+            SectionLabel("Playback")
+            ToggleRow(
+                label = "Resume from last position",
+                description = "When off, items always start from the beginning.",
+                checked = settings.autoResume,
+                onCheckedChange = { vm.setAutoResume(it) }
+            )
+            ToggleRow(
+                label = "Show \"Next Up\" as a separate row",
+                description = "When off, in-progress and next-up items merge " +
+                    "into a single Continue Watching row.",
+                checked = settings.showNextUpRow,
+                onCheckedChange = { vm.setShowNextUpRow(it) }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            SectionLabel("Subtitles")
             ToggleRow(
                 label = "Always play subtitles",
                 description = "Automatically enable a subtitle track when one is available.",
@@ -182,6 +198,15 @@ fun SettingsScreen(
                 checked = settings.subtitleBackground,
                 onCheckedChange = { vm.setSubtitleBackground(it) }
             )
+
+            Spacer(Modifier.height(24.dp))
+
+            SectionLabel("Streaming")
+            ClickableRow(
+                label = "Default quality",
+                value = formatBitrate(settings.defaultMaxBitrate),
+                onClick = { showQualityDialog = true }
+            )
             ToggleRow(
                 label = "Always transcode",
                 description = "Use server-side transcoding for every video. Fixes " +
@@ -198,13 +223,6 @@ fun SettingsScreen(
                     "serve as-is.",
                 checked = settings.directPlayOnly,
                 onCheckedChange = { vm.setDirectPlayOnly(it) }
-            )
-            ToggleRow(
-                label = "Show \"Next Up\" as a separate row",
-                description = "When off, in-progress and next-up items merge " +
-                    "into a single Continue Watching row.",
-                checked = settings.showNextUpRow,
-                onCheckedChange = { vm.setShowNextUpRow(it) }
             )
             ToggleRow(
                 label = "Use mpv for downloads",
@@ -288,6 +306,17 @@ fun SettingsScreen(
                 showQualityDialog = false
             },
             onDismiss = { showQualityDialog = false }
+        )
+    }
+
+    if (showThemeColorDialog) {
+        ThemeColorDialog(
+            current = settings.appThemeColor,
+            onSelect = {
+                vm.setAppThemeColor(it)
+                showThemeColorDialog = false
+            },
+            onDismiss = { showThemeColorDialog = false }
         )
     }
 
@@ -633,6 +662,63 @@ private fun formatBitrate(b: Long?): String = when (b) {
     1_000_000L -> "360p"
     else -> "${b / 1_000_000} Mbps"
 }
+
+@Composable
+private fun ThemeColorDialog(
+    current: AppThemeColor,
+    onSelect: (AppThemeColor) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Theme color", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                AppThemeColor.entries.forEach { color ->
+                    val selected = color == current
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(color) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(themeColorSwatch(color))
+                                .border(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.onBackground
+                                        else MaterialTheme.colorScheme.outline,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            color.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(selected = selected, onClick = { onSelect(color) })
+                    }
+                }
+            }
+        }
+    )
+}
+
+private fun themeColorSwatch(color: AppThemeColor): androidx.compose.ui.graphics.Color =
+    when (color) {
+        AppThemeColor.FJORA -> androidx.compose.ui.graphics.Color(0xFFBF5820)
+        AppThemeColor.PURPLE -> androidx.compose.ui.graphics.Color(0xFF8C63D8)
+        AppThemeColor.TEAL -> androidx.compose.ui.graphics.Color(0xFF2A9D8F)
+        AppThemeColor.BLUE -> androidx.compose.ui.graphics.Color(0xFF3E7BD8)
+        AppThemeColor.ROSE -> androidx.compose.ui.graphics.Color(0xFFC84B73)
+        AppThemeColor.GREEN -> androidx.compose.ui.graphics.Color(0xFF6D9F45)
+    }
 
 private val subtitleLanguageOptions = listOf(
     null to "Any available",

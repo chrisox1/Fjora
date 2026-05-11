@@ -102,6 +102,8 @@ fun LibraryScreen(
     var showSortDialog by remember { mutableStateOf(false) }
     var fullListSearchOpen by remember { mutableStateOf(false) }
     var fullListSearchQuery by remember { mutableStateOf("") }
+    var homeReturnIndex by remember { mutableIntStateOf(0) }
+    var homeReturnOffset by remember { mutableIntStateOf(0) }
     var searchOpen by remember { mutableStateOf(false) }
     var showServerInfoDialog by remember { mutableStateOf(false) }
     var refreshRequested by remember { mutableStateOf(false) }
@@ -162,6 +164,8 @@ fun LibraryScreen(
         showSortDialog = false
         fullListSearchOpen = false
         fullListSearchQuery = ""
+        homeReturnIndex = 0
+        homeReturnOffset = 0
     }
 
     val latestMovies = remember(items) {
@@ -222,11 +226,21 @@ fun LibraryScreen(
     }
     val gridState = rememberLazyGridState()
     LaunchedEffect(viewMode) {
-        gridState.scrollToItem(0)
         if (viewMode == LibraryViewMode.HOME) {
             fullListSearchOpen = false
             fullListSearchQuery = ""
+            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
+        } else {
+            gridState.animateScrollToItem(0)
         }
+    }
+    val openFullList: (LibraryViewMode) -> Unit = { mode ->
+        homeReturnIndex = gridState.firstVisibleItemIndex
+        homeReturnOffset = gridState.firstVisibleItemScrollOffset
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+        showSortDialog = false
+        viewMode = mode
     }
     val libraryTabsAtTop by remember {
         derivedStateOf {
@@ -513,7 +527,8 @@ fun LibraryScreen(
                                         items(visibleSearchResults, key = { it.id }) { item ->
                                             LibraryCard(
                                                 item, vm,
-                                                onClick = { handleClick(item) }
+                                                onClick = { handleClick(item) },
+                                                modifier = Modifier.animateItemPlacement()
                                             )
                                         }
                                     }
@@ -588,7 +603,12 @@ fun LibraryScreen(
                                     }
                                 } else {
                                     items(visibleFullListItems, key = { it.id }) { item ->
-                                        LibraryCard(item, vm, onClick = { handleClick(item) })
+                                        LibraryCard(
+                                            item,
+                                            vm,
+                                            onClick = { handleClick(item) },
+                                            modifier = Modifier.animateItemPlacement()
+                                        )
                                     }
                                 }
                             } else {
@@ -666,7 +686,7 @@ fun LibraryScreen(
                                                 title = "Latest movies",
                                                 items = latestMovies.take(20),
                                                 vm = vm,
-                                                onViewAll = { viewMode = LibraryViewMode.MOVIES },
+                                                onViewAll = { openFullList(LibraryViewMode.MOVIES) },
                                                 onItemClick = handleClick
                                             )
                                         }
@@ -677,7 +697,7 @@ fun LibraryScreen(
                                                 title = "Latest shows",
                                                 items = latestShows.take(20),
                                                 vm = vm,
-                                                onViewAll = { viewMode = LibraryViewMode.SHOWS },
+                                                onViewAll = { openFullList(LibraryViewMode.SHOWS) },
                                                 onItemClick = handleClick
                                             )
                                         }
@@ -1193,6 +1213,7 @@ private fun LatestMediaRow(
                     item = item,
                     vm = vm,
                     onClick = { onItemClick(item) },
+                    showTypeBadge = false,
                     modifier = Modifier.width(150.dp)
                 )
             }
@@ -1317,6 +1338,7 @@ private fun LibraryCard(
     item: MediaItem,
     vm: AppViewModel,
     onClick: () -> Unit,
+    showTypeBadge: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1364,24 +1386,26 @@ private fun LibraryCard(
                         .size(48.dp)
                 )
             }
-            Surface(
-                color = Color.Black.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-            ) {
-                Text(
-                    when (item.type) {
-                        "Movie" -> "Movie"
-                        "Series" -> "Series"
-                        "Episode" -> "Episode"
-                        else -> item.type
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                )
+            if (showTypeBadge) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                ) {
+                    Text(
+                        when (item.type) {
+                            "Movie" -> "Movie"
+                            "Series" -> "Series"
+                            "Episode" -> "Episode"
+                            else -> item.type
+                        },
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
             val progress = item.playedFraction ?: 0f
             if (progress > 0f && progress < 0.99f) {

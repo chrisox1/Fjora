@@ -39,6 +39,7 @@ fun MovieDetailScreen(
     item: MediaItem,
     onBack: () -> Unit,
     onPlay: (MediaItem) -> Unit,
+    onSeriesClick: (MediaItem, Int?) -> Unit = { _, _ -> },
     onPersonClick: (Person) -> Unit = {}
 ) {
     // Try to fetch full details (with overview, mediaSources etc.) — fall
@@ -83,7 +84,12 @@ fun MovieDetailScreen(
             // Top hero — backdrop with gradient scrim, title + meta overlaid.
             // Sits BEHIND the system bars (the scaffold padding is applied
             // only to the content below).
-            Hero(vm, details, topPadding = padding.calculateTopPadding())
+            Hero(
+                vm = vm,
+                item = details,
+                topPadding = padding.calculateTopPadding(),
+                onSeriesClick = onSeriesClick
+            )
 
             AnimatedVisibility(
                 visible = loadingDetails,
@@ -290,7 +296,12 @@ fun MovieDetailScreen(
 }
 
 @Composable
-internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compose.ui.unit.Dp) {
+internal fun Hero(
+    vm: AppViewModel,
+    item: MediaItem,
+    topPadding: androidx.compose.ui.unit.Dp,
+    onSeriesClick: (MediaItem, Int?) -> Unit = { _, _ -> }
+) {
     val cs = MaterialTheme.colorScheme
     Box(
         Modifier
@@ -371,7 +382,13 @@ internal fun Hero(vm: AppViewModel, item: MediaItem, topPadding: androidx.compos
                             style = MaterialTheme.typography.labelLarge,
                             color = Color.White.copy(alpha = 0.85f),
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier
+                                .clickable(enabled = item.seriesItem() != null) {
+                                    item.seriesItem()?.let { series ->
+                                        onSeriesClick(series, item.seasonNumber)
+                                    }
+                                }
+                                .padding(bottom = 4.dp)
                         )
                     }
                 }
@@ -412,13 +429,13 @@ internal fun DetailGrid(item: MediaItem) {
 
     val w = videoStream?.width ?: 0
     val h = videoStream?.height ?: 0
-    val resolution = when {
-        w >= 3840 || h >= 2160 -> "4K"
-        w >= 2560 || h >= 1440 -> "1440p"
-        w >= 1920 || h >= 1080 -> "1080p"
-        w >= 1280 || h >= 720 -> "720p"
-        w >= 854 || h >= 480 -> "480p"
-        h > 0 -> "${h}p"
+    val quality = when {
+        w >= 3840 || h >= 2160 -> "UHD"
+        w >= 2560 || h >= 1440 -> "QHD"
+        w >= 1920 || h >= 1080 -> "FHD"
+        w >= 1280 || h >= 720 -> "HD"
+        w >= 854 || h >= 480 -> "SD"
+        h > 0 -> "SD"
         else -> null
     }
     val videoCodec = videoStream?.codec?.let {
@@ -432,8 +449,10 @@ internal fun DetailGrid(item: MediaItem) {
         }
     }
     val container = source?.container?.uppercase()
+    val dynamicRange = videoStream?.dynamicRangeLabel() ?: "SDR"
 
-    val primaryAudioLabel = audioStreams.firstOrNull()?.codec?.let {
+    val primaryAudio = audioStreams.firstOrNull()
+    val primaryAudioLabel = primaryAudio?.codec?.let {
         when (it.lowercase()) {
             "ac3" -> "Dolby Digital"
             "eac3" -> "Dolby Digital+"
@@ -448,6 +467,10 @@ internal fun DetailGrid(item: MediaItem) {
     }
     val audioLabel = buildString {
         if (primaryAudioLabel != null) append(primaryAudioLabel)
+        primaryAudio?.audioChannelLabel()?.let { channels ->
+            if (isNotEmpty()) append(" - ")
+            append(channels)
+        }
         if (audioStreams.size > 1) {
             if (isNotEmpty()) append(" · ")
             append("${audioStreams.size} tracks")
@@ -456,8 +479,14 @@ internal fun DetailGrid(item: MediaItem) {
 
     val director = item.people.firstOrNull { it.type == "Director" }?.name
 
-    val badges = listOfNotNull(resolution, videoCodec, container)
+    val badges = listOfNotNull(
+        quality?.let { "Quality" to it },
+        "Range" to dynamicRange,
+        primaryAudio?.audioChannelLabel()?.let { "Audio" to it },
+        container?.let { "Container" to it }
+    )
     val infoRows = buildList {
+        videoCodec?.let { add("Video" to it) }
         if (audioLabel.isNotEmpty()) add("Audio" to audioLabel)
         if (subCount > 0) add("Subtitles" to "$subCount ${if (subCount == 1) "track" else "tracks"}")
         director?.let { add("Director" to it) }
@@ -491,18 +520,28 @@ internal fun DetailGrid(item: MediaItem) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(bottom = if (infoRows.isEmpty()) 0.dp else 14.dp)
                     ) {
-                        badges.forEach { badge ->
+                        badges.forEach { (label, value) ->
                             Surface(
-                                shape = RoundedCornerShape(5.dp),
-                                color = cs.outline.copy(alpha = 0.35f),
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (label == "Quality") cs.primary.copy(alpha = 0.18f)
+                                    else cs.outline.copy(alpha = 0.26f),
+                                contentColor = if (label == "Quality") cs.primary else cs.onSurface
                             ) {
-                                Text(
-                                    badge,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = cs.onSurface,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = LocalContentColor.current.copy(alpha = 0.72f)
+                                    )
+                                    Text(
+                                        value,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = LocalContentColor.current
+                                    )
+                                }
                             }
                         }
                     }
@@ -520,7 +559,7 @@ internal fun DetailGrid(item: MediaItem) {
                             label,
                             style = MaterialTheme.typography.bodySmall,
                             color = cs.onSurfaceVariant,
-                            modifier = Modifier.width(78.dp)
+                            modifier = Modifier.width(92.dp)
                         )
                         Text(
                             value,
@@ -532,6 +571,55 @@ internal fun DetailGrid(item: MediaItem) {
                 }
             }
         }
+    }
+}
+
+private fun MediaItem.seriesItem(): MediaItem? {
+    val id = seriesId?.takeIf { it.isNotBlank() } ?: return null
+    val title = seriesName?.takeIf { it.isNotBlank() } ?: return null
+    return MediaItem(
+        id = id,
+        name = title,
+        type = "Series"
+    )
+}
+
+private fun com.example.jellyfinplayer.api.MediaStream.dynamicRangeLabel(): String? {
+    val combined = listOfNotNull(videoRange, videoRangeType, colorTransfer)
+        .joinToString(" ")
+        .lowercase()
+    return when {
+        combined.contains("dolby") || combined.contains("dv") -> "Dolby Vision"
+        combined.contains("hdr10+") -> "HDR10+"
+        combined.contains("hdr") || combined.contains("smpte2084") || combined.contains("pq") -> "HDR"
+        combined.contains("hlg") -> "HLG"
+        combined.contains("sdr") -> "SDR"
+        combined.isNotBlank() -> "SDR"
+        else -> null
+    }
+}
+
+private fun com.example.jellyfinplayer.api.MediaStream.audioChannelLabel(): String? {
+    channelLayout?.takeIf { it.isNotBlank() }?.lowercase()?.let { layout ->
+        when {
+            "7.1" in layout || "8" in layout -> return "7.1"
+            "6.1" in layout || "7" in layout -> return "6.1"
+            "5.1" in layout || "6" in layout -> return "5.1"
+            "stereo" in layout || "2" in layout -> return "Stereo"
+            "mono" in layout || "1" in layout -> return "Mono"
+        }
+    }
+    return when (channels) {
+        null -> null
+        1 -> "Mono"
+        2 -> "Stereo"
+        3 -> "2.1"
+        4 -> "4.0"
+        5 -> "5.0"
+        6 -> "5.1"
+        7 -> "6.1"
+        8 -> "7.1"
+        else -> "${channels} ch"
     }
 }
 

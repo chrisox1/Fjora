@@ -149,7 +149,10 @@ class MainActivity : ComponentActivity() {
             registerReceiver(pipActionReceiver, filter)
         }
         setContent {
-            AppTheme { AppNav(vm, isInPipState.value) }
+            val settings by vm.settings.collectAsState()
+            AppTheme(themeColor = settings.appThemeColor) {
+                AppNav(vm, isInPipState.value)
+            }
         }
     }
 
@@ -483,6 +486,9 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                             movieDetail = item
                         )
                     }
+                },
+                onSeriesClick = { series, season ->
+                    screen = Screen.Episodes(series, season)
                 },
                 onPersonClick = { person ->
                     screen = Screen.PersonDetail(person, previous = s)

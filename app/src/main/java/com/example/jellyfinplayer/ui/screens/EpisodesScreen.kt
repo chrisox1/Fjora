@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -245,14 +246,7 @@ private fun EpisodesContent(
         }
         if (!series.overview.isNullOrBlank()) {
             item {
-                Text(
-                    series.overview,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                        .animateContentSize()
-                )
+                SeriesOverview(series.overview)
             }
         }
         // Cast & crew strip for the series (people who appear across the
@@ -292,6 +286,12 @@ private fun EpisodesContent(
             }
             else -> {
                 item {
+                    EpisodeSectionHeader(
+                        selectedSeason = selectedSeason,
+                        count = visible.size
+                    )
+                }
+                item {
                     SeasonTabs(
                         seasons = seasons,
                         selected = selectedSeason,
@@ -317,7 +317,7 @@ private fun SeriesHero(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(240.dp)
+            .height(300.dp)
             .background(cs.surfaceVariant) // placeholder under the backdrop
     ) {
         val backdrop = vm.backdropUrl(series, maxWidth = 1280)
@@ -337,15 +337,28 @@ private fun SeriesHero(
                 .background(
                     Brush.verticalGradient(
                         0f to Color.Black.copy(alpha = 0.45f),
-                        0.55f to Color.Transparent,
+                        0.42f to Color.Transparent,
+                        0.74f to cs.background.copy(alpha = 0.58f),
                         1f to cs.background
+                    )
+                )
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.62f),
+                        0.58f to Color.Transparent
                     )
                 )
         )
         Column(
             Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .fillMaxWidth()
+                .tabletContentWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             Text(
                 series.name,
@@ -383,17 +396,59 @@ private fun SeriesHero(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
-                    )
+                    ),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
                 ) {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         if (episodeLabel.isNullOrBlank()) targetLabel else "$targetLabel $episodeLabel",
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleSmall
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SeriesOverview(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .animateContentSize()
+    )
+}
+
+@Composable
+private fun EpisodeSectionHeader(selectedSeason: Int?, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            if (selectedSeason == 0) "Specials" else "Season ${selectedSeason ?: ""}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            "$count episode${if (count == 1) "" else "s"}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -408,27 +463,34 @@ private fun SeasonTabs(
         Spacer(Modifier.height(8.dp))
         return
     }
-    val selectedIndex = seasons.indexOf(selected).coerceAtLeast(0)
-    ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        containerColor = Color.Transparent,
-        edgePadding = 12.dp,
-        divider = {}
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
     ) {
-        seasons.forEachIndexed { idx, s ->
-            Tab(
-                selected = idx == selectedIndex,
-                onClick = { onSelect(s) },
-                text = {
-                    Text(
-                        if (s == 0) "Specials" else "Season $s",
-                        fontWeight = if (idx == selectedIndex) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-            )
+        items(seasons, key = { it }) { season ->
+            val isSelected = season == selected
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { onSelect(season) }
+            ) {
+                Text(
+                    if (season == 0) "Specials" else "Season $season",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                )
+            }
         }
     }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(4.dp))
 }
 
 @Composable
@@ -437,105 +499,133 @@ private fun EpisodeRow(vm: AppViewModel, ep: MediaItem, onClick: () -> Unit) {
     val played = ep.userData?.played == true
     val progress = ep.playedFraction ?: 0f
 
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = cs.surfaceVariant.copy(alpha = 0.30f)
     ) {
-        Box(
-            Modifier
-                .width(140.dp)
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(cs.surfaceVariant)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val url = vm.posterUrl(ep, maxHeight = 240)
-            if (url != null) {
-                AsyncImage(
-                    model = url,
-                    contentDescription = ep.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+            Box(
+                Modifier
+                    .width(132.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(cs.surfaceVariant)
+            ) {
+                val url = vm.posterUrl(ep, maxHeight = 240)
+                if (url != null) {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = ep.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.18f))
+                    )
+                }
                 Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.18f))
-                )
-            }
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(36.dp)
-            )
-            // Watched checkmark badge sits in the top-right corner.
-            if (played) {
-                Surface(
-                    color = cs.primary,
-                    shape = RoundedCornerShape(50),
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                        .align(Alignment.Center)
+                        .clip(RoundedCornerShape(50))
+                        .size(42.dp)
+                        .background(Color.Black.copy(alpha = 0.38f)),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Watched",
-                        tint = cs.onPrimary,
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                // Watched checkmark badge sits in the top-right corner.
+                if (played) {
+                    Surface(
+                        color = cs.primary,
+                        shape = RoundedCornerShape(50),
                         modifier = Modifier
-                            .size(18.dp)
-                            .padding(2.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Watched",
+                            tint = cs.onPrimary,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .padding(2.dp)
+                        )
+                    }
+                }
+                // Progress sliver for in-progress episodes (unwatched + position > 0).
+                if (!played && progress > 0f) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        color = cs.primary,
+                        trackColor = Color.White.copy(alpha = 0.25f),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(3.dp)
                     )
                 }
             }
-            // Progress sliver for in-progress episodes (unwatched + position > 0).
-            if (!played && progress > 0f) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    color = cs.primary,
-                    trackColor = Color.White.copy(alpha = 0.25f),
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                )
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            val number = ep.episodeNumber?.let { "E$it" }
-            Text(
-                buildString {
-                    if (number != null) append("$number  ")
-                    append(ep.name)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (played) cs.onSurfaceVariant else cs.onBackground,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            ep.runtimeMinutes?.let {
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                val number = ep.episodeNumber?.let { "E$it" }
                 Text(
-                    "$it min",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-            ep.overview?.takeIf { it.isNotBlank() }?.let {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant,
+                    buildString {
+                        if (number != null) append("$number  ")
+                        append(ep.name)
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (played) cs.onSurfaceVariant else cs.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 3.dp)
+                ) {
+                    ep.runtimeMinutes?.let {
+                        Text(
+                            "$it min",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSurfaceVariant
+                        )
+                    }
+                    ep.communityRating?.let {
+                        Text(
+                            "Rating ${"%.1f".format(it)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSurfaceVariant
+                        )
+                    }
+                }
+                ep.overview?.takeIf { it.isNotBlank() }?.let {
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
