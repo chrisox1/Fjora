@@ -288,6 +288,7 @@ class JellyfinRepository {
         if (query.isBlank()) return@mapAuthErrors emptyList()
         val a = api ?: error("Call configure() first")
         a.search(userId, authHeader(), query.trim()).items
+            .filter { it.type == "Movie" || it.type == "Series" }
     }
 
     /** Items in progress — feeds the "Continue Watching" row. */

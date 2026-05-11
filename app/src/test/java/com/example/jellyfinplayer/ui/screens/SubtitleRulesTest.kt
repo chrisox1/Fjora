@@ -6,9 +6,9 @@ import org.junit.Test
 
 class SubtitleRulesTest {
     @Test
-    fun normalSubtitleFractionUsesFourPercentWhenInsideClamp() {
+    fun normalSubtitleFractionUsesFivePercentWhenInsideClamp() {
         assertEquals(
-            0.04f,
+            0.05f,
             clampedExoSubtitleFraction(screenHeightDp = 600, scale = 1f, inPip = false),
             0.0001f
         )
@@ -17,8 +17,8 @@ class SubtitleRulesTest {
     @Test
     fun normalSubtitleFractionHonorsUserScaleInsideClamp() {
         assertEquals(
-            0.05f,
-            clampedExoSubtitleFraction(screenHeightDp = 600, scale = 1.25f, inPip = false),
+            0.0625f,
+            clampedExoSubtitleFraction(screenHeightDp = 500, scale = 1.25f, inPip = false),
             0.0001f
         )
     }

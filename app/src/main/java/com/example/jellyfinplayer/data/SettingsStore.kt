@@ -19,6 +19,7 @@ class SettingsStore(private val context: Context) {
         val DEFAULT_BITRATE = longPreferencesKey("default_max_bitrate")
         val AUTO_RESUME = booleanPreferencesKey("auto_resume")
         val SHOW_NEXT_UP_ROW = booleanPreferencesKey("show_next_up_row")
+        val HOME_HERO_SOURCE = stringPreferencesKey("home_hero_source")
         val FORCE_TRANSCODING = booleanPreferencesKey("force_transcoding")
         val USE_MPV = booleanPreferencesKey("use_mpv_for_local")
         val USE_MPV_FOR_ALL = booleanPreferencesKey("use_mpv_for_all")
@@ -36,6 +37,7 @@ class SettingsStore(private val context: Context) {
         val defaultMaxBitrate: Long?,
         val autoResume: Boolean,
         val showNextUpRow: Boolean,
+        val homeHeroSource: HomeHeroSource,
         val forceTranscoding: Boolean,
         val directPlayOnly: Boolean,
         /**
@@ -62,6 +64,7 @@ class SettingsStore(private val context: Context) {
             defaultMaxBitrate = prefs[DEFAULT_BITRATE]?.takeIf { it > 0 },
             autoResume = prefs[AUTO_RESUME] ?: true,
             showNextUpRow = prefs[SHOW_NEXT_UP_ROW] ?: true,
+            homeHeroSource = HomeHeroSource.fromStorageValue(prefs[HOME_HERO_SOURCE]),
             forceTranscoding = prefs[FORCE_TRANSCODING] ?: false,
             directPlayOnly = directPlayOnly,
             useMpvForLocal = effectiveUseMpvForLocal(
@@ -121,6 +124,12 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    suspend fun setHomeHeroSource(source: HomeHeroSource) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[HOME_HERO_SOURCE] = source.storageValue
+        }
+    }
+
     suspend fun setForceTranscoding(enabled: Boolean) {
         context.settingsDataStore.edit { prefs ->
             prefs[FORCE_TRANSCODING] = enabled
@@ -169,6 +178,17 @@ class SettingsStore(private val context: Context) {
             if (bytes == null || bytes <= 0L) prefs.remove(DOWNLOAD_STORAGE_LIMIT_BYTES)
             else prefs[DOWNLOAD_STORAGE_LIMIT_BYTES] = bytes
         }
+    }
+}
+
+enum class HomeHeroSource(val storageValue: String, val label: String) {
+    RESUME("resume", "Resume"),
+    FEATURED("featured", "Featured"),
+    NEXT_UP("next_up", "Next up");
+
+    companion object {
+        fun fromStorageValue(value: String?): HomeHeroSource =
+            entries.firstOrNull { it.storageValue == value } ?: RESUME
     }
 }
 

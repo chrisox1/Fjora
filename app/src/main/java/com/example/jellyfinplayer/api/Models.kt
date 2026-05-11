@@ -57,6 +57,9 @@ data class MediaItem(
     @SerialName("Name") val name: String,
     @SerialName("Type") val type: String, // "Movie", "Series", "Episode"
     @SerialName("ProductionYear") val productionYear: Int? = null,
+    @SerialName("DateCreated") val dateCreated: String? = null,
+    @SerialName("DateLastMediaAdded") val dateLastMediaAdded: String? = null,
+    @SerialName("PremiereDate") val premiereDate: String? = null,
     @SerialName("Overview") val overview: String? = null,
     @SerialName("RunTimeTicks") val runTimeTicks: Long? = null,
     @SerialName("SeriesName") val seriesName: String? = null,
@@ -132,7 +135,8 @@ data class UserItemData(
     @SerialName("PlaybackPositionTicks") val playbackPositionTicks: Long = 0,
     @SerialName("PlayCount") val playCount: Int = 0,
     @SerialName("Played") val played: Boolean = false,
-    @SerialName("PlayedPercentage") val playedPercentage: Double? = null
+    @SerialName("PlayedPercentage") val playedPercentage: Double? = null,
+    @SerialName("LastPlayedDate") val lastPlayedDate: String? = null
 )
 
 /**

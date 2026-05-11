@@ -9,6 +9,7 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DownloadsStore
+import com.example.jellyfinplayer.data.HomeHeroSource
 import com.example.jellyfinplayer.data.SettingsStore
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.CancellationException
@@ -98,6 +99,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             defaultMaxBitrate = null,
             autoResume = true,
             showNextUpRow = true,
+            homeHeroSource = HomeHeroSource.RESUME,
             forceTranscoding = false,
             directPlayOnly = false,
             useMpvForLocal = false,
@@ -122,6 +124,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setShowNextUpRow(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setShowNextUpRow(enabled) }
+    }
+
+    fun setHomeHeroSource(source: HomeHeroSource) {
+        viewModelScope.launch { settingsStore.setHomeHeroSource(source) }
     }
 
     fun setForceTranscoding(enabled: Boolean) {

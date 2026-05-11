@@ -80,6 +80,7 @@ import com.example.jellyfinplayer.api.MediaSegment
 import com.example.jellyfinplayer.api.MediaStream
 import com.example.jellyfinplayer.api.ResolvedStream
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private enum class FillMode(val label: String) {
@@ -296,7 +297,7 @@ fun PlayerScreen(
 
     var chromeVisible by remember { mutableStateOf(true) }
     var controlsLocked by remember { mutableStateOf(false) }
-    var gestureFeedback by remember { mutableStateOf<String?>(null) }
+    var gestureFeedback by remember { mutableStateOf<PlayerGestureFeedbackState?>(null) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     // Slider scrub state. The watchdog below clears isDragging if Android
@@ -1049,6 +1050,12 @@ fun PlayerScreen(
             Box(
                 Modifier
                     .matchParentSize()
+                    .playerBrightnessVolumeGestures(
+                        activity = activity,
+                        audioManager = audioManager,
+                        enabled = !controlsLocked,
+                        onFeedback = { gestureFeedback = it }
+                    )
                     .zIndex(1f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -1305,8 +1312,8 @@ fun PlayerScreen(
         }
 
         PlayerGestureFeedback(
-            text = gestureFeedback,
-            modifier = Modifier.align(Alignment.Center)
+            feedback = gestureFeedback,
+            modifier = Modifier.matchParentSize().zIndex(6f)
         )
 
         if (!controlsLocked && !inPip && activeIntroSegment != null) {
@@ -1488,6 +1495,9 @@ private fun PlayerSeekBar(
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
     var activeFraction by remember { mutableFloatStateOf(fraction.coerceIn(0f, 1f)) }
+    var horizontalDragActive by remember { mutableStateOf(false) }
+    var dragDx by remember { mutableFloatStateOf(0f) }
+    var dragDy by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val thumbSize = 20.dp
     val thumbPx = with(density) { thumbSize.toPx() }
@@ -1514,19 +1524,36 @@ private fun PlayerSeekBar(
                 if (!enabled) return@pointerInput
                 detectDragGestures(
                     onDragStart = { offset ->
+                        horizontalDragActive = false
+                        dragDx = 0f
+                        dragDy = 0f
                         activeFraction = fractionForX(offset.x)
-                        onScrub(activeFraction)
                     },
                     onDragEnd = {
-                        onSeek(activeFraction)
+                        if (horizontalDragActive) onSeek(activeFraction)
+                        horizontalDragActive = false
                     },
                     onDragCancel = {
-                        onSeek(activeFraction)
+                        if (horizontalDragActive) onSeek(activeFraction)
+                        horizontalDragActive = false
                     },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        activeFraction = fractionForX(change.position.x)
-                        onScrub(activeFraction)
+                    onDrag = { change, dragAmount ->
+                        dragDx += dragAmount.x
+                        dragDy += dragAmount.y
+                        if (!horizontalDragActive) {
+                            val mostlyHorizontal = abs(dragDx) > abs(dragDy) &&
+                                abs(dragDx) > with(density) { 10.dp.toPx() }
+                            val mostlyVertical = abs(dragDy) > abs(dragDx) &&
+                                abs(dragDy) > with(density) { 10.dp.toPx() }
+                            if (!mostlyVertical && mostlyHorizontal) {
+                                horizontalDragActive = true
+                            }
+                        }
+                        if (horizontalDragActive) {
+                            change.consume()
+                            activeFraction = fractionForX(change.position.x)
+                            onScrub(activeFraction)
+                        }
                     }
                 )
             },

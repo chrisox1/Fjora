@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DiagnosticLog
+import com.example.jellyfinplayer.data.HomeHeroSource
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlin.math.roundToInt
@@ -46,6 +47,7 @@ fun SettingsScreen(
     var showQualityDialog by remember { mutableStateOf(false) }
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showSubtitleColorDialog by remember { mutableStateOf(false) }
+    var showHeroSourceDialog by remember { mutableStateOf(false) }
     var showDownloadLimitDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthStore.AccountRecord?>(null) }
     var showSignOutAllConfirm by remember { mutableStateOf(false) }
@@ -136,6 +138,11 @@ fun SettingsScreen(
                 description = "When off, items always start from the beginning.",
                 checked = settings.autoResume,
                 onCheckedChange = { vm.setAutoResume(it) }
+            )
+            ClickableRow(
+                label = "Home card",
+                value = settings.homeHeroSource.label,
+                onClick = { showHeroSourceDialog = true }
             )
             ToggleRow(
                 label = "Always play subtitles",
@@ -303,6 +310,17 @@ fun SettingsScreen(
                 showSubtitleColorDialog = false
             },
             onDismiss = { showSubtitleColorDialog = false }
+        )
+    }
+
+    if (showHeroSourceDialog) {
+        HomeHeroSourceDialog(
+            current = settings.homeHeroSource,
+            onSelect = {
+                vm.setHomeHeroSource(it)
+                showHeroSourceDialog = false
+            },
+            onDismiss = { showHeroSourceDialog = false }
         )
     }
 
@@ -643,6 +661,43 @@ private fun subtitleDelayLabel(delayMs: Long): String = when {
     delayMs == 0L -> "0 ms"
     delayMs > 0L -> "+${delayMs} ms"
     else -> "${delayMs} ms"
+}
+
+@Composable
+private fun HomeHeroSourceDialog(
+    current: HomeHeroSource,
+    onSelect: (HomeHeroSource) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Home card", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                Text(
+                    "If the selected source has nothing to show, Fjora uses a featured item.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                HomeHeroSource.entries.forEach { source ->
+                    val selected = source == current
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(source) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected, onClick = { onSelect(source) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(source.label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    )
 }
 
 private fun exportDiagnostics(ctx: android.content.Context) {

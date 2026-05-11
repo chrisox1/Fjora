@@ -126,7 +126,7 @@ fun MpvPlayerScreen(
     var mpvFirstFrameReady by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
     var controlsLocked by remember { mutableStateOf(false) }
-    var gestureFeedback by remember { mutableStateOf<String?>(null) }
+    var gestureFeedback by remember { mutableStateOf<PlayerGestureFeedbackState?>(null) }
     var mediaSegments by remember { mutableStateOf<List<MediaSegment>>(emptyList()) }
     var initError by remember { mutableStateOf<String?>(null) }
     var sourceUrl by remember(localFilePath) { mutableStateOf(localFilePath) }
@@ -976,8 +976,8 @@ fun MpvPlayerScreen(
         }
 
         PlayerGestureFeedback(
-            text = gestureFeedback,
-            modifier = Modifier.align(Alignment.Center)
+            feedback = gestureFeedback,
+            modifier = Modifier.matchParentSize()
         )
 
         // Custom subtitle overlay — text cues downloaded from Jellyfin and

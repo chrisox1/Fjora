@@ -9,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,19 +18,24 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -51,12 +58,22 @@ import coil.compose.AsyncImage
 import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.UiState
 import com.example.jellyfinplayer.api.MediaItem
+import com.example.jellyfinplayer.data.HomeHeroSource
 import com.example.jellyfinplayer.ui.components.DownloadStatus
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
 
-private enum class FilterTab(val label: String) { ALL("All"), MOVIES("Movies"), SHOWS("Shows") }
+private enum class LibraryViewMode(val title: String) { HOME(""), MOVIES("Movies"), SHOWS("Shows") }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class MediaSortKey(val label: String) {
+    TITLE("Title"),
+    IMDB_RATING("IMDB Rating"),
+    PARENTAL_RATING("Parental Rating"),
+    DATE_ADDED("Date Added"),
+    DATE_PLAYED("Date Played"),
+    RELEASE_DATE("Release Date")
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(
     vm: AppViewModel,
@@ -79,7 +96,12 @@ fun LibraryScreen(
     val searchResults = vm.searchResults.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
     val downloads = vm.downloads.collectAsState().value
-    var filter by remember { mutableStateOf(FilterTab.ALL) }
+    var viewMode by remember { mutableStateOf(LibraryViewMode.HOME) }
+    var sortKey by remember { mutableStateOf(MediaSortKey.TITLE) }
+    var sortAscending by remember { mutableStateOf(true) }
+    var showSortDialog by remember { mutableStateOf(false) }
+    var fullListSearchOpen by remember { mutableStateOf(false) }
+    var fullListSearchQuery by remember { mutableStateOf("") }
     var searchOpen by remember { mutableStateOf(false) }
     var showServerInfoDialog by remember { mutableStateOf(false) }
     var refreshRequested by remember { mutableStateOf(false) }
@@ -103,6 +125,13 @@ fun LibraryScreen(
         }
     }
 
+    LaunchedEffect(fullListSearchOpen) {
+        if (fullListSearchOpen) {
+            kotlinx.coroutines.delay(50)
+            runCatching { searchFocusRequester.requestFocus() }
+        }
+    }
+
     LaunchedEffect(refreshing) {
         if (refreshing) wasRefreshing = true
         if (!refreshing && wasRefreshing && refreshRequested) {
@@ -118,20 +147,87 @@ fun LibraryScreen(
         keyboard?.hide()
     }
 
-    val filtered = remember(items, filter) {
-        when (filter) {
-            FilterTab.ALL -> items
-            FilterTab.MOVIES -> items.filter { it.type == "Movie" }
-            FilterTab.SHOWS -> items.filter { it.type == "Series" }
+    BackHandler(enabled = !isSearchMode && fullListSearchOpen) {
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+        keyboard?.hide()
+    }
+
+    BackHandler(enabled = !isSearchMode && !fullListSearchOpen && viewMode != LibraryViewMode.HOME) {
+        viewMode = LibraryViewMode.HOME
+    }
+
+    LaunchedEffect(selectedLibraryId) {
+        viewMode = LibraryViewMode.HOME
+        showSortDialog = false
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+    }
+
+    val latestMovies = remember(items) {
+        items
+            .filter { it.type == "Movie" }
+            .sortedByDescending { it.latestSortValue() }
+    }
+    val latestShows = remember(items) {
+        items
+            .filter { it.type == "Series" }
+            .sortedByDescending { it.latestSortValue() }
+    }
+    val fullListItems = remember(items, viewMode, sortKey, sortAscending) {
+        val base = when (viewMode) {
+            LibraryViewMode.MOVIES -> items.filter { it.type == "Movie" }
+            LibraryViewMode.SHOWS -> items.filter { it.type == "Series" }
+            LibraryViewMode.HOME -> emptyList()
+        }
+        sortMediaItems(base, sortKey, sortAscending)
+    }
+    val visibleFullListItems = remember(fullListItems, fullListSearchQuery) {
+        val query = fullListSearchQuery.trim()
+        if (query.isBlank()) {
+            fullListItems
+        } else {
+            fullListItems.filter { item ->
+                item.name.contains(query, ignoreCase = true) ||
+                    item.productionYear?.toString()?.contains(query) == true ||
+                    item.communityRating?.let { "%.1f".format(it) }?.contains(query) == true
+            }
+        }
+    }
+    val visibleSearchResults = remember(searchResults, selectedLibraryId, items) {
+        if (selectedLibraryId == null) {
+            searchResults
+        } else {
+            val currentLibraryIds = items.asSequence().map { it.id }.toSet()
+            searchResults.filter { it.id in currentLibraryIds }
         }
     }
     val groupedDownloads = remember(downloads) {
         groupDownloadsByContainer(downloads)
     }
-    val featuredItem = remember(continueWatching, nextUp, items) {
-        continueWatching.firstOrNull() ?: nextUp.firstOrNull() ?: items.firstOrNull()
+    val featuredItems = remember(continueWatching, nextUp, items, settings.homeHeroSource) {
+        homeHeroItems(
+            source = settings.homeHeroSource,
+            continueWatching = continueWatching,
+            nextUp = nextUp,
+            libraryItems = items
+        )
+    }
+    val featuredLabel = remember(continueWatching, nextUp, settings.homeHeroSource) {
+        homeHeroLabel(
+            source = settings.homeHeroSource,
+            hasResumeItems = continueWatching.isNotEmpty(),
+            hasNextUpItems = nextUp.isNotEmpty()
+        )
     }
     val gridState = rememberLazyGridState()
+    LaunchedEffect(viewMode) {
+        gridState.scrollToItem(0)
+        if (viewMode == LibraryViewMode.HOME) {
+            fullListSearchOpen = false
+            fullListSearchQuery = ""
+        }
+    }
     val libraryTabsAtTop by remember {
         derivedStateOf {
             gridState.firstVisibleItemIndex == 0 &&
@@ -139,6 +235,7 @@ fun LibraryScreen(
         }
     }
     val showLibraryTabs = !isSearchMode &&
+        viewMode == LibraryViewMode.HOME &&
         (libraries.size > 1 || downloads.isNotEmpty()) &&
         libraryTabsAtTop
 
@@ -232,40 +329,66 @@ fun LibraryScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } },
+                        if (viewMode == LibraryViewMode.HOME) {
+                            serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } }
+                        } else {
+                            viewMode.title
+                        },
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { showServerInfoDialog = true }
+                        modifier = if (viewMode == LibraryViewMode.HOME) {
+                            Modifier.clickable { showServerInfoDialog = true }
+                        } else {
+                            Modifier
+                        }
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        searchOpen = true
-                    }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search")
+                    if (viewMode == LibraryViewMode.HOME) {
+                        IconButton(onClick = {
+                            searchOpen = true
+                        }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
+                    } else {
+                        IconButton(onClick = { viewMode = LibraryViewMode.HOME }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
                 },
                 actions = {
-                    IconButton(
-                        enabled = !refreshing,
-                        onClick = {
-                            refreshRequested = true
-                            vm.loadHome(force = true)
+                    if (viewMode == LibraryViewMode.HOME) {
+                        IconButton(
+                            enabled = !refreshing,
+                            onClick = {
+                                refreshRequested = true
+                                vm.loadHome(force = true)
+                            }
+                        ) {
+                            if (refreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
                         }
-                    ) {
-                        if (refreshing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
-                    }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    } else {
+                        IconButton(onClick = { fullListSearchOpen = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search ${viewMode.title}")
+                        }
+                        IconButton(onClick = { showSortDialog = true }) {
+                            Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -290,6 +413,25 @@ fun LibraryScreen(
                         onClear = {
                             vm.clearSearch()
                             searchOpen = false
+                            keyboard?.hide()
+                        },
+                        onSubmit = { keyboard?.hide() },
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .focusRequester(searchFocusRequester)
+                    )
+                }
+            } else if (viewMode != LibraryViewMode.HOME && fullListSearchOpen) {
+                Surface(
+                    color = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    SearchBar(
+                        query = fullListSearchQuery,
+                        onQueryChange = { fullListSearchQuery = it },
+                        onClear = {
+                            fullListSearchOpen = false
+                            fullListSearchQuery = ""
                             keyboard?.hide()
                         },
                         onSubmit = { keyboard?.hide() },
@@ -344,7 +486,7 @@ fun LibraryScreen(
                                     // Without this, "No matches" briefly
                                     // appears between the user finishing
                                     // typing and the results landing.
-                                    searchInFlight && searchResults.isEmpty() -> {
+                                    searchInFlight && visibleSearchResults.isEmpty() -> {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             Box(
                                                 Modifier
@@ -359,7 +501,7 @@ fun LibraryScreen(
                                             }
                                         }
                                     }
-                                    searchResults.isEmpty() -> {
+                                    visibleSearchResults.isEmpty() -> {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             EmptyBlock(
                                                 "No matches",
@@ -368,7 +510,7 @@ fun LibraryScreen(
                                         }
                                     }
                                     else -> {
-                                        items(searchResults, key = { it.id }) { item ->
+                                        items(visibleSearchResults, key = { it.id }) { item ->
                                             LibraryCard(
                                                 item, vm,
                                                 onClick = { handleClick(item) }
@@ -429,18 +571,34 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
-                            } else {
-                                featuredItem?.let { featured ->
+                            } else if (viewMode != LibraryViewMode.HOME) {
+                                if (visibleFullListItems.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
-                                        FeaturedBanner(
-                                            item = featured,
+                                        if (fullListSearchQuery.isBlank()) {
+                                            EmptyBlock(
+                                                "Nothing here yet",
+                                                "Add ${viewMode.title.lowercase()} on your Jellyfin server, then refresh."
+                                            )
+                                        } else {
+                                            EmptyBlock(
+                                                "No matches",
+                                                "Try a different search term."
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    items(visibleFullListItems, key = { it.id }) { item ->
+                                        LibraryCard(item, vm, onClick = { handleClick(item) })
+                                    }
+                                }
+                            } else {
+                                if (featuredItems.isNotEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        FeaturedCarousel(
+                                            items = featuredItems,
                                             vm = vm,
-                                            label = when (featured.id) {
-                                                continueWatching.firstOrNull()?.id -> "Continue watching"
-                                                nextUp.firstOrNull()?.id -> "Next up"
-                                                else -> "Featured"
-                                            },
-                                            onClick = { handleClick(featured) }
+                                            label = featuredLabel,
+                                            onItemClick = handleClick
                                         )
                                     }
                                 }
@@ -494,11 +652,7 @@ fun LibraryScreen(
                                     }
                                 }
 
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    FilterRow(filter = filter, onFilterChange = { filter = it })
-                                }
-
-                                if (filtered.isEmpty()) {
+                                if (latestMovies.isEmpty() && latestShows.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         EmptyBlock(
                                             "Nothing here yet",
@@ -506,8 +660,27 @@ fun LibraryScreen(
                                         )
                                     }
                                 } else {
-                                    items(filtered, key = { it.id }) { item ->
-                                        LibraryCard(item, vm, onClick = { handleClick(item) })
+                                    if (latestMovies.isNotEmpty()) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            LatestMediaRow(
+                                                title = "Latest movies",
+                                                items = latestMovies.take(20),
+                                                vm = vm,
+                                                onViewAll = { viewMode = LibraryViewMode.MOVIES },
+                                                onItemClick = handleClick
+                                            )
+                                        }
+                                    }
+                                    if (latestShows.isNotEmpty()) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            LatestMediaRow(
+                                                title = "Latest shows",
+                                                items = latestShows.take(20),
+                                                vm = vm,
+                                                onViewAll = { viewMode = LibraryViewMode.SHOWS },
+                                                onItemClick = handleClick
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -541,6 +714,16 @@ fun LibraryScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showSortDialog) {
+        SortDialog(
+            selectedKey = sortKey,
+            ascending = sortAscending,
+            onSelectKey = { sortKey = it },
+            onAscendingChange = { sortAscending = it },
+            onDismiss = { showSortDialog = false }
         )
     }
 
@@ -614,6 +797,111 @@ private fun SearchBar(
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
         shape = RoundedCornerShape(8.dp)
     )
+}
+
+@Composable
+private fun SortDialog(
+    selectedKey: MediaSortKey,
+    ascending: Boolean,
+    onSelectKey: (MediaSortKey) -> Unit,
+    onAscendingChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sort by") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = ascending,
+                        onClick = { onAscendingChange(true) },
+                        label = { Text("Ascending") },
+                        shape = RoundedCornerShape(50)
+                    )
+                    FilterChip(
+                        selected = !ascending,
+                        onClick = { onAscendingChange(false) },
+                        label = { Text("Descending") },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
+                MediaSortKey.values().forEach { key ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSelectKey(key) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedKey == key,
+                            onClick = { onSelectKey(key) }
+                        )
+                        Text(
+                            key.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        },
+        shape = MaterialTheme.shapes.extraLarge
+    )
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun FeaturedCarousel(
+    items: List<MediaItem>,
+    vm: AppViewModel,
+    label: String,
+    onItemClick: (MediaItem) -> Unit
+) {
+    val pagerState = rememberPagerState(pageCount = { items.size })
+    var lastTouchAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(items.size) {
+        while (items.size > 1) {
+            kotlinx.coroutines.delay(1000)
+            val idleForMs = System.currentTimeMillis() - lastTouchAt
+            if (idleForMs >= 15_000 && !pagerState.isScrollInProgress) {
+                val nextPage = (pagerState.currentPage + 1) % items.size
+                pagerState.animateScrollToPage(nextPage)
+                lastTouchAt = System.currentTimeMillis()
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier.pointerInput(items.size) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent()
+                    lastTouchAt = System.currentTimeMillis()
+                }
+            }
+        }
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            pageSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            val item = items[page]
+            FeaturedBanner(
+                item = item,
+                vm = vm,
+                label = label,
+                onClick = { onItemClick(item) }
+            )
+        }
+    }
 }
 
 @Composable
@@ -768,6 +1056,97 @@ private fun episodeLabel(item: MediaItem): String = buildList {
     if (item.name.isNotBlank()) add(item.name)
 }.joinToString(" - ")
 
+private fun homeHeroItems(
+    source: HomeHeroSource,
+    continueWatching: List<MediaItem>,
+    nextUp: List<MediaItem>,
+    libraryItems: List<MediaItem>
+): List<MediaItem> {
+    val featured = libraryItems.take(1)
+    return when (source) {
+        HomeHeroSource.RESUME -> continueWatching.ifEmpty { featured }
+        HomeHeroSource.NEXT_UP -> nextUp.ifEmpty { featured }
+        HomeHeroSource.FEATURED -> featured
+    }
+}
+
+private fun homeHeroLabel(
+    source: HomeHeroSource,
+    hasResumeItems: Boolean,
+    hasNextUpItems: Boolean
+): String = when (source) {
+    HomeHeroSource.RESUME -> if (hasResumeItems) "Continue watching" else "Featured"
+    HomeHeroSource.NEXT_UP -> if (hasNextUpItems) "Next up" else "Featured"
+    HomeHeroSource.FEATURED -> "Featured"
+}
+
+private fun MediaItem.latestSortValue(): String =
+    if (type == "Series") {
+        dateLastMediaAdded ?: dateCreated ?: premiereDate ?: productionYear?.toString().orEmpty()
+    } else {
+        dateCreated ?: dateLastMediaAdded ?: premiereDate ?: productionYear?.toString().orEmpty()
+    }
+
+private fun MediaItem.releaseSortValue(): String? =
+    premiereDate ?: productionYear?.let { "%04d".format(it) }
+
+private fun sortMediaItems(
+    items: List<MediaItem>,
+    key: MediaSortKey,
+    ascending: Boolean
+): List<MediaItem> = items.sortedWith { left, right ->
+    when (key) {
+        MediaSortKey.TITLE -> compareNullableStrings(left.name, right.name, ascending)
+        MediaSortKey.IMDB_RATING -> compareNullableValues(
+            left.communityRating,
+            right.communityRating,
+            ascending
+        )
+        MediaSortKey.PARENTAL_RATING -> compareNullableStrings(
+            left.officialRating,
+            right.officialRating,
+            ascending
+        )
+        MediaSortKey.DATE_ADDED -> compareNullableStrings(
+            left.dateCreated ?: left.dateLastMediaAdded,
+            right.dateCreated ?: right.dateLastMediaAdded,
+            ascending
+        )
+        MediaSortKey.DATE_PLAYED -> compareNullableStrings(
+            left.userData?.lastPlayedDate,
+            right.userData?.lastPlayedDate,
+            ascending
+        )
+        MediaSortKey.RELEASE_DATE -> compareNullableStrings(
+            left.releaseSortValue(),
+            right.releaseSortValue(),
+            ascending
+        )
+    }
+}
+
+private fun <T : Comparable<T>> compareNullableValues(
+    left: T?,
+    right: T?,
+    ascending: Boolean
+): Int {
+    if (left == null && right == null) return 0
+    if (left == null) return 1
+    if (right == null) return -1
+    val result = left.compareTo(right)
+    return if (ascending) result else -result
+}
+
+private fun compareNullableStrings(left: String?, right: String?, ascending: Boolean): Int {
+    val cleanLeft = left?.takeIf { it.isNotBlank() }
+    val cleanRight = right?.takeIf { it.isNotBlank() }
+    if (cleanLeft == null && cleanRight == null) return 0
+    if (cleanLeft == null) return 1
+    if (cleanRight == null) return -1
+    val result = cleanLeft.compareTo(cleanRight, ignoreCase = true)
+    return if (ascending) result else -result
+}
+
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -780,17 +1159,41 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun FilterRow(filter: FilterTab, onFilterChange: (FilterTab) -> Unit) {
-    Column(Modifier.padding(top = 12.dp, bottom = 4.dp)) {
-        SectionHeader("All titles")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterTab.values().forEach { tab ->
-                val selected = tab == filter
-                FilterChip(
-                    selected = selected,
-                    onClick = { onFilterChange(tab) },
-                    label = { Text(tab.label, fontWeight = FontWeight.Medium) },
-                    shape = RoundedCornerShape(50)
+private fun LatestMediaRow(
+    title: String,
+    items: List<MediaItem>,
+    vm: AppViewModel,
+    onViewAll: () -> Unit,
+    onItemClick: (MediaItem) -> Unit
+) {
+    Column(Modifier.padding(top = 14.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = onViewAll, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Show all $title")
+            }
+        }
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 2.dp)
+        ) {
+            items(items, key = { it.id }) { item ->
+                LibraryCard(
+                    item = item,
+                    vm = vm,
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.width(150.dp)
                 )
             }
         }
@@ -910,10 +1313,15 @@ private fun WideCard(item: MediaItem, vm: AppViewModel, showProgress: Boolean, o
 }
 
 @Composable
-private fun LibraryCard(item: MediaItem, vm: AppViewModel, onClick: () -> Unit) {
+private fun LibraryCard(
+    item: MediaItem,
+    vm: AppViewModel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    Column(modifier = Modifier.clickable { onClick() }) {
+    Column(modifier = modifier.clickable { onClick() }) {
         Box(
             Modifier
                 .fillMaxWidth()
