@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,13 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -108,7 +107,7 @@ fun CastRow(
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // Use a synthetic key (id + index) as a final defensive layer
             // so even if dedupe somehow misses an edge case, the LazyRow
@@ -124,73 +123,63 @@ fun CastRow(
 @Composable
 private fun PersonCard(vm: AppViewModel, person: Person, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = cs.surfaceVariant.copy(alpha = 0.34f),
+    Column(
         modifier = Modifier
-            .width(112.dp)
-            .clickable(onClick = onClick)
+            .width(150.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.Start
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(3f / 4f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(cs.surfaceVariant),
+            contentAlignment = Alignment.Center
         ) {
-            // Round headshot. Placeholder color underneath so the AsyncImage
-            // crossfades into something instead of popping. Falls back to a
-            // generic Person icon when the server has no image for this person
-            // (a common case for minor roles in older catalog imports).
-            Box(
-                Modifier
-                    .size(82.dp)
-                    .clip(CircleShape)
-                    .background(cs.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                val url = vm.personImageUrl(person)
-                if (url != null) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = person.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = cs.onSurfaceVariant,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                person.name,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = cs.onBackground,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            // Show character name for actors, role type for crew (e.g.
-            // "Director"). Empty for actors with no character listed (rare
-            // but possible on poorly-populated metadata).
-            val secondary = when {
-                person.type == "Actor" && !person.role.isNullOrBlank() -> person.role
-                person.type != "Actor" -> person.type
-                else -> null
-            }
-            if (secondary != null) {
-                Text(
-                    secondary,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cs.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+            val url = vm.personImageUrl(person)
+            if (url != null) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = person.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp)
                 )
             }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            person.name,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = cs.onBackground,
+            textAlign = TextAlign.Start,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        val secondary = when {
+            person.type == "Actor" && !person.role.isNullOrBlank() -> person.role
+            person.type != "Actor" -> person.type
+            else -> null
+        }
+        if (secondary != null) {
+            Text(
+                secondary,
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                textAlign = TextAlign.Start,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

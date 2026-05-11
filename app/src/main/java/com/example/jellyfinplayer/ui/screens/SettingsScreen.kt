@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
+import com.example.jellyfinplayer.data.AppBackgroundColor
 import com.example.jellyfinplayer.data.AppThemeColor
 import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DiagnosticLog
@@ -47,6 +48,7 @@ fun SettingsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var showQualityDialog by remember { mutableStateOf(false) }
     var showThemeColorDialog by remember { mutableStateOf(false) }
+    var showBackgroundColorDialog by remember { mutableStateOf(false) }
     var showSubtitleLanguageDialog by remember { mutableStateOf(false) }
     var showSubtitleColorDialog by remember { mutableStateOf(false) }
     var showHeroSourceDialog by remember { mutableStateOf(false) }
@@ -133,6 +135,11 @@ fun SettingsScreen(
                 label = "Theme color",
                 value = settings.appThemeColor.label,
                 onClick = { showThemeColorDialog = true }
+            )
+            ClickableRow(
+                label = "Background color",
+                value = settings.appBackgroundColor.label,
+                onClick = { showBackgroundColorDialog = true }
             )
             ClickableRow(
                 label = "Home card",
@@ -317,6 +324,17 @@ fun SettingsScreen(
                 showThemeColorDialog = false
             },
             onDismiss = { showThemeColorDialog = false }
+        )
+    }
+
+    if (showBackgroundColorDialog) {
+        BackgroundColorDialog(
+            current = settings.appBackgroundColor,
+            onSelect = {
+                vm.setAppBackgroundColor(it)
+                showBackgroundColorDialog = false
+            },
+            onDismiss = { showBackgroundColorDialog = false }
         )
     }
 
@@ -713,11 +731,68 @@ private fun ThemeColorDialog(
 private fun themeColorSwatch(color: AppThemeColor): androidx.compose.ui.graphics.Color =
     when (color) {
         AppThemeColor.FJORA -> androidx.compose.ui.graphics.Color(0xFFBF5820)
-        AppThemeColor.PURPLE -> androidx.compose.ui.graphics.Color(0xFF8C63D8)
-        AppThemeColor.TEAL -> androidx.compose.ui.graphics.Color(0xFF2A9D8F)
-        AppThemeColor.BLUE -> androidx.compose.ui.graphics.Color(0xFF3E7BD8)
-        AppThemeColor.ROSE -> androidx.compose.ui.graphics.Color(0xFFC84B73)
-        AppThemeColor.GREEN -> androidx.compose.ui.graphics.Color(0xFF6D9F45)
+        AppThemeColor.PURPLE -> androidx.compose.ui.graphics.Color(0xFF7A5AC8)
+        AppThemeColor.TEAL -> androidx.compose.ui.graphics.Color(0xFF3D9A93)
+        AppThemeColor.BLUE -> androidx.compose.ui.graphics.Color(0xFF587DAE)
+        AppThemeColor.ROSE -> androidx.compose.ui.graphics.Color(0xFFA84F66)
+        AppThemeColor.GREEN -> androidx.compose.ui.graphics.Color(0xFF7C8F56)
+    }
+
+@Composable
+private fun BackgroundColorDialog(
+    current: AppBackgroundColor,
+    onSelect: (AppBackgroundColor) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Background color", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                AppBackgroundColor.entries.forEach { color ->
+                    val selected = color == current
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(color) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(backgroundColorSwatch(color))
+                                .border(
+                                    width = if (selected) 2.dp else 1.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.onBackground
+                                        else MaterialTheme.colorScheme.outline,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            color.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        RadioButton(selected = selected, onClick = { onSelect(color) })
+                    }
+                }
+            }
+        }
+    )
+}
+
+private fun backgroundColorSwatch(color: AppBackgroundColor): androidx.compose.ui.graphics.Color =
+    when (color) {
+        AppBackgroundColor.FJORA -> androidx.compose.ui.graphics.Color(0xFF05060D)
+        AppBackgroundColor.CHARCOAL -> androidx.compose.ui.graphics.Color(0xFF070809)
+        AppBackgroundColor.MIDNIGHT -> androidx.compose.ui.graphics.Color(0xFF030812)
+        AppBackgroundColor.AUBERGINE -> androidx.compose.ui.graphics.Color(0xFF0C0610)
+        AppBackgroundColor.FOREST -> androidx.compose.ui.graphics.Color(0xFF050A07)
+        AppBackgroundColor.ESPRESSO -> androidx.compose.ui.graphics.Color(0xFF0B0705)
     }
 
 private val subtitleLanguageOptions = listOf(

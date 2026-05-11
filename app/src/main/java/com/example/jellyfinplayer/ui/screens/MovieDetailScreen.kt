@@ -510,10 +510,10 @@ internal fun DetailGrid(item: MediaItem) {
         )
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = cs.surfaceVariant,
+            color = cs.surfaceVariant.copy(alpha = 0.32f),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                 // Technical spec badges — resolution, codec, container
                 if (badges.isNotEmpty()) {
                     Row(
@@ -524,7 +524,7 @@ internal fun DetailGrid(item: MediaItem) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (label == "Quality") cs.primary.copy(alpha = 0.18f)
-                                    else cs.outline.copy(alpha = 0.26f),
+                                    else cs.surface.copy(alpha = 0.55f),
                                 contentColor = if (label == "Quality") cs.primary else cs.onSurface
                             ) {
                                 Column(
@@ -550,7 +550,7 @@ internal fun DetailGrid(item: MediaItem) {
                 infoRows.forEachIndexed { index, (label, value) ->
                     if (index > 0) {
                         HorizontalDivider(
-                            color = cs.outline.copy(alpha = 0.15f),
+                            color = cs.outline.copy(alpha = 0.10f),
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }

@@ -469,7 +469,6 @@ private fun SeasonTabs(
         modifier = Modifier
             .fillMaxWidth()
             .tabletContentWidth()
-            .wrapContentWidth(Alignment.CenterHorizontally)
     ) {
         items(seasons, key = { it }) { season ->
             val isSelected = season == selected

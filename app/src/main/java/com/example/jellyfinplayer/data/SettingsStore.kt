@@ -18,6 +18,7 @@ class SettingsStore(private val context: Context) {
     companion object {
         val DEFAULT_BITRATE = longPreferencesKey("default_max_bitrate")
         val APP_THEME_COLOR = stringPreferencesKey("app_theme_color")
+        val APP_BACKGROUND_COLOR = stringPreferencesKey("app_background_color")
         val AUTO_RESUME = booleanPreferencesKey("auto_resume")
         val SHOW_NEXT_UP_ROW = booleanPreferencesKey("show_next_up_row")
         val HOME_HERO_SOURCE = stringPreferencesKey("home_hero_source")
@@ -37,6 +38,7 @@ class SettingsStore(private val context: Context) {
     data class Settings(
         val defaultMaxBitrate: Long?,
         val appThemeColor: AppThemeColor,
+        val appBackgroundColor: AppBackgroundColor,
         val autoResume: Boolean,
         val showNextUpRow: Boolean,
         val homeHeroSource: HomeHeroSource,
@@ -65,6 +67,7 @@ class SettingsStore(private val context: Context) {
         Settings(
             defaultMaxBitrate = prefs[DEFAULT_BITRATE]?.takeIf { it > 0 },
             appThemeColor = AppThemeColor.fromStorageValue(prefs[APP_THEME_COLOR]),
+            appBackgroundColor = AppBackgroundColor.fromStorageValue(prefs[APP_BACKGROUND_COLOR]),
             autoResume = prefs[AUTO_RESUME] ?: true,
             showNextUpRow = prefs[SHOW_NEXT_UP_ROW] ?: true,
             homeHeroSource = HomeHeroSource.fromStorageValue(prefs[HOME_HERO_SOURCE]),
@@ -118,6 +121,12 @@ class SettingsStore(private val context: Context) {
     suspend fun setAppThemeColor(color: AppThemeColor) {
         context.settingsDataStore.edit { prefs ->
             prefs[APP_THEME_COLOR] = color.storageValue
+        }
+    }
+
+    suspend fun setAppBackgroundColor(color: AppBackgroundColor) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[APP_BACKGROUND_COLOR] = color.storageValue
         }
     }
 
@@ -203,14 +212,28 @@ enum class HomeHeroSource(val storageValue: String, val label: String) {
 
 enum class AppThemeColor(val storageValue: String, val label: String) {
     FJORA("fjora", "Fjora orange"),
-    PURPLE("purple", "Purple"),
-    TEAL("teal", "Teal"),
-    BLUE("blue", "Blue"),
-    ROSE("rose", "Rose"),
-    GREEN("green", "Green");
+    PURPLE("purple", "Amethyst"),
+    TEAL("teal", "Nordic teal"),
+    BLUE("blue", "Steel blue"),
+    ROSE("rose", "Wine"),
+    GREEN("green", "Sage");
 
     companion object {
         fun fromStorageValue(value: String?): AppThemeColor =
+            entries.firstOrNull { it.storageValue == value } ?: FJORA
+    }
+}
+
+enum class AppBackgroundColor(val storageValue: String, val label: String) {
+    FJORA("fjora", "Fjora night"),
+    CHARCOAL("charcoal", "Charcoal"),
+    MIDNIGHT("midnight", "Midnight"),
+    AUBERGINE("aubergine", "Aubergine"),
+    FOREST("forest", "Forest"),
+    ESPRESSO("espresso", "Espresso");
+
+    companion object {
+        fun fromStorageValue(value: String?): AppBackgroundColor =
             entries.firstOrNull { it.storageValue == value } ?: FJORA
     }
 }

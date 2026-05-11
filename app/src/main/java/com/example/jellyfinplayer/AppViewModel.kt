@@ -7,6 +7,7 @@ import com.example.jellyfinplayer.api.AuthExpiredException
 import com.example.jellyfinplayer.api.JellyfinRepository
 import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
+import com.example.jellyfinplayer.data.AppBackgroundColor
 import com.example.jellyfinplayer.data.AppThemeColor
 import com.example.jellyfinplayer.data.AuthStore
 import com.example.jellyfinplayer.data.DownloadsStore
@@ -99,6 +100,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         initialValue = SettingsStore.Settings(
             defaultMaxBitrate = null,
             appThemeColor = AppThemeColor.FJORA,
+            appBackgroundColor = AppBackgroundColor.FJORA,
             autoResume = true,
             showNextUpRow = true,
             homeHeroSource = HomeHeroSource.RESUME,
@@ -122,6 +124,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setAppThemeColor(color: AppThemeColor) {
         viewModelScope.launch { settingsStore.setAppThemeColor(color) }
+    }
+
+    fun setAppBackgroundColor(color: AppBackgroundColor) {
+        viewModelScope.launch { settingsStore.setAppBackgroundColor(color) }
     }
 
     fun setAutoResume(enabled: Boolean) {

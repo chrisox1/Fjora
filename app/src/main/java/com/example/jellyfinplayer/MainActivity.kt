@@ -150,7 +150,10 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val settings by vm.settings.collectAsState()
-            AppTheme(themeColor = settings.appThemeColor) {
+            AppTheme(
+                themeColor = settings.appThemeColor,
+                backgroundColor = settings.appBackgroundColor
+            ) {
                 AppNav(vm, isInPipState.value)
             }
         }
