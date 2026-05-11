@@ -607,6 +607,7 @@ private fun com.example.jellyfinplayer.api.MediaStream.audioChannelLabel(): Stri
             "5.1" in layout || "6" in layout -> return "5.1"
             "stereo" in layout || "2" in layout -> return "Stereo"
             "mono" in layout || "1" in layout -> return "Mono"
+            else -> Unit
         }
     }
     return when (channels) {
