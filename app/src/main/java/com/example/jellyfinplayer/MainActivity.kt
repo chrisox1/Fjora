@@ -45,6 +45,7 @@ import com.example.jellyfinplayer.ui.screens.MpvPlayerScreen
 import com.example.jellyfinplayer.ui.screens.PersonScreen
 import com.example.jellyfinplayer.ui.screens.PlayerScreen
 import com.example.jellyfinplayer.ui.screens.SettingsScreen
+import com.example.jellyfinplayer.ui.screens.WelcomeScreen
 import com.example.jellyfinplayer.ui.theme.AppTheme
 
 private sealed class Screen {
@@ -58,7 +59,11 @@ private sealed class Screen {
      * it's a movie and back goes to the library.
      */
     data class MovieDetail(val movie: MediaItem, val series: MediaItem? = null) : Screen()
-    data class Episodes(val series: MediaItem, val initialSeason: Int? = null) : Screen()
+    data class Episodes(
+        val series: MediaItem,
+        val initialSeason: Int? = null,
+        val initialEpisodeId: String? = null
+    ) : Screen()
     data class PersonDetail(val person: Person, val previous: Screen) : Screen()
 
     /**
@@ -220,6 +225,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppNav(vm: AppViewModel, inPip: Boolean) {
     val loggedIn = vm.isLoggedIn.collectAsState().value
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val firstRunPrefs = remember(context) {
+        context.getSharedPreferences("first_run", android.content.Context.MODE_PRIVATE)
+    }
+    var showWelcome by remember {
+        mutableStateOf(!firstRunPrefs.getBoolean("welcome_seen", false))
+    }
     var screen by remember { mutableStateOf<Screen>(Screen.Library) }
 
     LaunchedEffect(loggedIn) { if (loggedIn == true) screen = Screen.Library }
@@ -235,7 +247,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
     // app — making library text overlap the notch. Whenever we're NOT on
     // the player screen, force DEFAULT cutout mode so all other screens
     // get their normal status-bar-safe area.
-    val activity = androidx.compose.ui.platform.LocalContext.current as? Activity
+    val activity = context as? Activity
     LaunchedEffect(screen, activity) {
         val inAnyPlayer = screen is Screen.Player || screen is Screen.MpvPlayer
         activity?.requestedOrientation = if (inAnyPlayer) {
@@ -264,6 +276,15 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
         return
     }
     if (loggedIn == false) {
+        if (showWelcome) {
+            WelcomeScreen(
+                onContinue = {
+                    firstRunPrefs.edit().putBoolean("welcome_seen", true).apply()
+                    showWelcome = false
+                }
+            )
+            return
+        }
         LoginScreen(vm)
         return
     }
@@ -285,11 +306,19 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.item))
+                s.series != null -> Screen.Episodes(
+                    s.series,
+                    initialSeasonForEpisodeReturn(s.item),
+                    s.item.id
+                )
                 else -> Screen.Library
             }
             is Screen.MovieDetail -> when {
-                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.movie))
+                s.series != null -> Screen.Episodes(
+                    s.series,
+                    initialSeasonForEpisodeReturn(s.movie),
+                    s.movie.id
+                )
                 else -> Screen.Library
             }
             is Screen.Episodes -> Screen.Library
@@ -320,7 +349,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     }
                 }
                 s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                s.series != null -> Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.item))
+                s.series != null -> Screen.Episodes(
+                    s.series,
+                    initialSeasonForEpisodeReturn(s.item),
+                    s.item.id
+                )
                 else -> Screen.Library
             }
             is Screen.Library -> Screen.Library
@@ -480,7 +513,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 item = s.movie,
                 onBack = {
                     screen = if (s.series != null)
-                        Screen.Episodes(s.series, initialSeasonForEpisodeReturn(s.movie))
+                        Screen.Episodes(
+                            s.series,
+                            initialSeasonForEpisodeReturn(s.movie),
+                            s.movie.id
+                        )
                     else Screen.Library
                 },
                 onPlay = { item ->
@@ -495,8 +532,8 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                         )
                     }
                 },
-                onSeriesClick = { series, season ->
-                    screen = Screen.Episodes(series, season)
+                onSeriesClick = { series, season, episodeId ->
+                    screen = Screen.Episodes(series, season, episodeId)
                 },
                 onPersonClick = { person ->
                     screen = Screen.PersonDetail(person, previous = s)
@@ -506,6 +543,7 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 vm = vm,
                 series = s.series,
                 initialSeason = s.initialSeason,
+                initialEpisodeId = s.initialEpisodeId,
                 onBack = { screen = Screen.Library },
                 onEpisodeClick = { episode ->
                     screen = Screen.MovieDetail(episode, series = s.series)
@@ -555,10 +593,14 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                         // detail screen for downloaded items.
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(
-                            s.series,
-                            initialSeasonForEpisodeReturn(s.movieDetail ?: s.item)
-                        )
+                        s.series != null -> {
+                            val returnItem = s.movieDetail ?: s.item
+                            Screen.Episodes(
+                                s.series,
+                                initialSeasonForEpisodeReturn(returnItem),
+                                returnItem.id
+                            )
+                        }
                         else -> Screen.Library
                     }
                 },
@@ -591,10 +633,14 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     screen = when {
                         s.localFilePath != null -> Screen.Library
                         s.movieDetail != null -> Screen.MovieDetail(s.movieDetail, s.series)
-                        s.series != null -> Screen.Episodes(
-                            s.series,
-                            initialSeasonForEpisodeReturn(s.movieDetail ?: s.item)
-                        )
+                        s.series != null -> {
+                            val returnItem = s.movieDetail ?: s.item
+                            Screen.Episodes(
+                                s.series,
+                                initialSeasonForEpisodeReturn(returnItem),
+                                returnItem.id
+                            )
+                        }
                         else -> Screen.Library
                     }
                 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -41,6 +42,7 @@ fun EpisodesScreen(
     vm: AppViewModel,
     series: MediaItem,
     initialSeason: Int? = null,
+    initialEpisodeId: String? = null,
     onBack: () -> Unit,
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit = {}
@@ -158,6 +160,7 @@ fun EpisodesScreen(
                 episodes = episodes,
                 playTarget = playTarget,
                 selectedSeason = selectedSeason,
+                initialEpisodeId = initialEpisodeId,
                 onSeasonChange = { selectedSeason = it },
                 onEpisodeClick = onEpisodeClick,
                 onPersonClick = onPersonClick,
@@ -205,6 +208,7 @@ private fun EpisodesContent(
     episodes: List<MediaItem>,
     playTarget: MediaItem?,
     selectedSeason: Int?,
+    initialEpisodeId: String?,
     onSeasonChange: (Int) -> Unit,
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit,
@@ -218,8 +222,24 @@ private fun EpisodesContent(
         episodes.filter { (it.seasonNumber ?: 0) == (selectedSeason ?: 0) }
             .sortedBy { it.episodeNumber ?: 0 }
     }
+    val listState = rememberLazyListState()
+    var scrolledToInitialEpisode by remember(initialEpisodeId) { mutableStateOf(false) }
+
+    LaunchedEffect(loading, visible, initialEpisodeId, series.people, series.overview) {
+        val targetId = initialEpisodeId ?: return@LaunchedEffect
+        if (loading || scrolledToInitialEpisode || visible.isEmpty()) return@LaunchedEffect
+        val episodeIndex = visible.indexOfFirst { it.id == targetId }
+        if (episodeIndex < 0) return@LaunchedEffect
+        val rowsBeforeEpisodes = 2 +
+            if (!series.overview.isNullOrBlank()) 1 else 0 +
+            if (series.people.isNotEmpty()) 1 else 0 +
+            2
+        listState.animateScrollToItem((rowsBeforeEpisodes + episodeIndex - 2).coerceAtLeast(0))
+        scrolledToInitialEpisode = true
+    }
 
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {

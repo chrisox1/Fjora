@@ -277,13 +277,18 @@ fun MpvPlayerScreen(
         initError = null
         runCatching {
             val loaded = vm.loadItemDetails(item.id)
-            details = loaded
+            val effectiveItem = if (item.forceStartFromBeginning()) {
+                loaded.copy(userData = item.userData)
+            } else {
+                loaded
+            }
+            details = effectiveItem
             selectedSubtitleIndex = pickPreferredMpvSubtitle(
-                item = loaded,
+                item = effectiveItem,
                 alwaysPlaySubtitles = settings.alwaysPlaySubtitles,
                 preferredLanguage = settings.preferredSubtitleLanguage
             )?.let { stream ->
-                val subtitles = loaded.mediaSources.firstOrNull()?.mediaStreams
+                val subtitles = effectiveItem.mediaSources.firstOrNull()?.mediaStreams
                     ?.filter { it.type == "Subtitle" }
                     ?: emptyList()
                 subtitles.indexOfFirst { it.index == stream.index }
@@ -291,7 +296,7 @@ fun MpvPlayerScreen(
                     ?.plus(1)
             }
             vm.resolveStream(
-                item = loaded,
+                item = effectiveItem,
                 maxBitrate = null,
                 forceTranscode = false,
                 directPlayOnly = settings.directPlayOnly,
@@ -1183,6 +1188,9 @@ private fun formatMs(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s)
     else "%d:%02d".format(m, s)
 }
+
+private fun MediaItem.forceStartFromBeginning(): Boolean =
+    userData?.playbackPositionTicks == 0L && userData.playedPercentage == 0.0
 
 private fun applyMpvFillMode(mode: MpvFillMode) {
     when (mode) {

@@ -40,7 +40,7 @@ fun MovieDetailScreen(
     item: MediaItem,
     onBack: () -> Unit,
     onPlay: (MediaItem) -> Unit,
-    onSeriesClick: (MediaItem, Int?) -> Unit = { _, _ -> },
+    onSeriesClick: (MediaItem, Int?, String?) -> Unit = { _, _, _ -> },
     onPersonClick: (Person) -> Unit = {}
 ) {
     // Try to fetch full details (with overview, mediaSources etc.) — fall
@@ -346,7 +346,7 @@ internal fun Hero(
     vm: AppViewModel,
     item: MediaItem,
     topPadding: androidx.compose.ui.unit.Dp,
-    onSeriesClick: (MediaItem, Int?) -> Unit = { _, _ -> }
+    onSeriesClick: (MediaItem, Int?, String?) -> Unit = { _, _, _ -> }
 ) {
     val cs = MaterialTheme.colorScheme
     Box(
@@ -431,7 +431,7 @@ internal fun Hero(
                             modifier = Modifier
                                 .clickable(enabled = item.seriesItem() != null) {
                                     item.seriesItem()?.let { series ->
-                                        onSeriesClick(series, item.seasonNumber)
+                                        onSeriesClick(series, item.seasonNumber, item.id)
                                     }
                                 }
                                 .padding(bottom = 4.dp)

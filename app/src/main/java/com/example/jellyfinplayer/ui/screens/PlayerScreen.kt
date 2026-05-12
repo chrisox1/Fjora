@@ -354,7 +354,12 @@ fun PlayerScreen(
         }
         details = null
         try {
-            val d = vm.loadItemDetails(item.id)
+            val loaded = vm.loadItemDetails(item.id)
+            val d = if (item.forceStartFromBeginning()) {
+                loaded.copy(userData = item.userData)
+            } else {
+                loaded
+            }
             details = d
             selectedAudioIndex = pickPrimaryAudio(d)?.index
             selectedSubtitleIndex = pickPreferredSubtitle(
@@ -1433,6 +1438,9 @@ fun PlayerScreen(
         }
     }
 }
+
+private fun MediaItem.forceStartFromBeginning(): Boolean =
+    userData?.playbackPositionTicks == 0L && userData.playedPercentage == 0.0
 
 @OptIn(UnstableApi::class)
 private fun FillMode.toResizeMode(): Int = when (this) {

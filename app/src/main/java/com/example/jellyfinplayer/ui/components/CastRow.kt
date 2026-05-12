@@ -107,7 +107,7 @@ fun CastRow(
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Use a synthetic key (id + index) as a final defensive layer
             // so even if dedupe somehow misses an edge case, the LazyRow
@@ -125,7 +125,7 @@ private fun PersonCard(vm: AppViewModel, person: Person, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
-            .width(118.dp)
+            .width(104.dp)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.Start
     ) {
@@ -150,11 +150,11 @@ private fun PersonCard(vm: AppViewModel, person: Person, onClick: () -> Unit) {
                     imageVector = Icons.Default.Person,
                     contentDescription = null,
                     tint = cs.onSurfaceVariant,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             person.name,
             style = MaterialTheme.typography.bodySmall,
