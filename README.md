@@ -19,11 +19,15 @@ While already working well in daily use, some features may still have bugs or ro
 
 Screenshots:
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/1dda2dc8-df57-4899-9b26-bed6a0946d0e" width="19%" />
-  <img src="https://github.com/user-attachments/assets/965c340a-4b21-4566-a937-4ec01e0eab5c" width="19%" />
-  <img src="https://github.com/user-attachments/assets/a810a737-34b3-487f-ad9b-1d7753217b7b" width="19%" />
-  <img src="https://github.com/user-attachments/assets/a29a88fd-608e-4b9e-ac4b-2cbb379d8c24" width="19%" />
-  <img src="https://github.com/user-attachments/assets/ba5f2c7a-2460-4398-9fd3-70dc09bf6a0e" width="19%" />
+  <img src="https://github.com/user-attachments/assets/024dca65-352d-4eb7-a71e-1408e1896270" width="30%" />
+  <img src="https://github.com/user-attachments/assets/042495a6-1004-4475-a0cb-0c21eefe679c" width="30%" />
+  <img src="https://github.com/user-attachments/assets/cf7724fd-ad71-4f18-9a6c-7ac9af39de1e" width="30%" />
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/7a68bfef-6738-4d84-926e-a7a70d416513" width="30%" />
+  <img src="https://github.com/user-attachments/assets/44d5fc65-cf9c-4377-bb38-96a0fc100a40" width="30%" />
+  <img src="https://github.com/user-attachments/assets/ab0782f6-bd84-468d-a0f1-7590c14fcd75" width="30%" />
 </p>
 
 ## Features
