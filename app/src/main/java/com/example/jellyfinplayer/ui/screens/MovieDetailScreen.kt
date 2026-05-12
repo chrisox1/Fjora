@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,11 +104,13 @@ fun MovieDetailScreen(
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
+            MediaFactChips(details)
+            Spacer(Modifier.height(12.dp))
 
             // Primary CTA row — Resume/Play and Download. Both full-width
             // when alone; sit side-by-side when both shown.
             val started = (details.userData?.playbackPositionTicks ?: 0L) > 0L
+            val playable = details.type == "Movie" || details.type == "Episode"
             var showDownloadDialog by remember { mutableStateOf(false) }
 
             // Lookup any existing download for this item — used both by the
@@ -121,6 +124,7 @@ fun MovieDetailScreen(
             val downloadStatus = if (isDownloadable && existingDownload != null) {
                 rememberDownloadStatus(existingDownload.downloadId)
             } else null
+            val context = androidx.compose.ui.platform.LocalContext.current
 
             Row(
                 modifier = Modifier
@@ -144,7 +148,7 @@ fun MovieDetailScreen(
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (started) "Resume" else "Play",
+                        if (started) resumeLabel(details) else "Play",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = MaterialTheme.typography.titleMedium.fontSize
                     )
@@ -154,12 +158,28 @@ fun MovieDetailScreen(
                     val isInFlight = downloadStatus?.isInFlight == true
                     OutlinedButton(
                         onClick = {
-                            // Tapping during an in-flight download is a no-op
-                            // (already running). Tapping when complete is
-                            // also a no-op for now (would require a re-
-                            // download confirm dialog). Otherwise opens the
-                            // quality picker.
-                            if (!isInFlight && !isComplete) showDownloadDialog = true
+                            when {
+                                isInFlight && existingDownload != null -> {
+                                    val dm = context.getSystemService(
+                                        android.content.Context.DOWNLOAD_SERVICE
+                                    ) as? android.app.DownloadManager
+                                    runCatching {
+                                        dm?.remove(
+                                            *listOf(existingDownload.downloadId)
+                                                .plus(existingDownload.subtitleDownloadIds)
+                                                .toLongArray()
+                                        )
+                                    }
+                                    existingDownload.filePath?.let {
+                                        runCatching { java.io.File(it).delete() }
+                                    }
+                                    existingDownload.subtitlePaths.forEach {
+                                        runCatching { java.io.File(it).delete() }
+                                    }
+                                    vm.removeDownload(existingDownload.downloadId)
+                                }
+                                !isComplete -> showDownloadDialog = true
+                            }
                         },
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.height(52.dp)
@@ -167,10 +187,39 @@ fun MovieDetailScreen(
                         Icon(
                             imageVector = if (isComplete) Icons.Default.Check
                                 else com.example.jellyfinplayer.ui.icons.DownloadIconVector,
-                            contentDescription = if (isComplete) "Downloaded" else "Download",
+                            contentDescription = when {
+                                isInFlight -> "Cancel download"
+                                isComplete -> "Downloaded"
+                                else -> "Download"
+                            },
                             tint = if (isComplete) cs.primary else LocalContentColor.current
                         )
                     }
+                }
+            }
+
+            if (started && playable) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        onPlay(
+                            details.copy(
+                                userData = details.userData?.copy(
+                                    playbackPositionTicks = 0L,
+                                    playedPercentage = 0.0
+                                )
+                            )
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .tabletContentWidth()
+                        .align(Alignment.CenterHorizontally)
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text("Watch from beginning", fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -281,9 +330,6 @@ fun MovieDetailScreen(
                     }
                 }
             }
-
-            // Detail rows — show only the ones with actual data.
-            DetailGrid(details)
 
             // Cast & crew strip — horizontally scrollable. Filters to actors
             // first, then directors and writers if there's room. Many items
@@ -418,6 +464,106 @@ internal fun Hero(
         }
     }
 }
+
+@Composable
+private fun MediaFactChips(item: MediaItem) {
+    val cs = MaterialTheme.colorScheme
+    val facts = remember(item) { mediaFactLabels(item) }
+    if (facts.isEmpty()) return
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .padding(horizontal = 20.dp)
+            .horizontalScroll(rememberScrollState())
+    ) {
+        facts.forEachIndexed { index, fact ->
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (index == 0) cs.primary.copy(alpha = 0.18f)
+                    else cs.surfaceVariant.copy(alpha = 0.45f),
+                contentColor = if (index == 0) cs.primary else cs.onSurface
+            ) {
+                Text(
+                    fact,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun mediaFactLabels(item: MediaItem): List<String> {
+    val source = item.mediaSources.maxByOrNull { it.mediaStreams.size }
+    val video = source?.mediaStreams?.firstOrNull { it.type == "Video" }
+    val audio = source?.mediaStreams?.firstOrNull { it.type == "Audio" }
+
+    return listOfNotNull(
+        video?.qualityLabel(),
+        video?.videoCodecLabel(),
+        video?.dynamicRangeLabel() ?: video?.let { "SDR" },
+        audio?.audioCodecLabel(),
+        audio?.audioChannelLabel()
+    ).distinct()
+}
+
+private fun resumeLabel(item: MediaItem): String {
+    val position = item.userData?.playbackPositionTicks ?: return "Resume"
+    val runtime = item.runTimeTicks ?: return "Resume"
+    val remainingMinutes = ((runtime - position).coerceAtLeast(0L) / 600_000_000L)
+        .toInt()
+    return if (remainingMinutes > 0) {
+        "Resume - $remainingMinutes min left"
+    } else {
+        "Resume"
+    }
+}
+
+private fun com.example.jellyfinplayer.api.MediaStream.qualityLabel(): String? {
+    val w = width ?: 0
+    val h = height ?: 0
+    return when {
+        w >= 3840 || h >= 2160 -> "UHD"
+        w >= 2560 || h >= 1440 -> "QHD"
+        w >= 1920 || h >= 1080 -> "FHD"
+        w >= 1280 || h >= 720 -> "HD"
+        w >= 854 || h >= 480 -> "SD"
+        h > 0 -> "SD"
+        else -> null
+    }
+}
+
+private fun com.example.jellyfinplayer.api.MediaStream.videoCodecLabel(): String? =
+    codec?.let {
+        when (it.lowercase()) {
+            "hevc", "h265" -> "HEVC"
+            "h264", "avc" -> "H.264"
+            "av1" -> "AV1"
+            "vp9" -> "VP9"
+            "mpeg4" -> "MPEG-4"
+            else -> it.uppercase()
+        }
+    }
+
+private fun com.example.jellyfinplayer.api.MediaStream.audioCodecLabel(): String? =
+    codec?.let {
+        when (it.lowercase()) {
+            "ac3" -> "Dolby Digital"
+            "eac3" -> "Dolby Digital Plus"
+            "truehd" -> "Dolby TrueHD"
+            "dts" -> "DTS"
+            "aac" -> "AAC"
+            "mp3" -> "MP3"
+            "flac" -> "FLAC"
+            "opus" -> "Opus"
+            else -> it.uppercase()
+        }
+    }
 
 @Composable
 internal fun DetailGrid(item: MediaItem) {
@@ -799,6 +945,7 @@ internal fun startDownload(
         // Download subtitle tracks alongside the video. Skip image-based
         // codecs (PGS/VOBSUB) — Jellyfin can't serve those as text.
         val subtitlePaths = mutableListOf<String>()
+        val subtitleDownloadIds = mutableListOf<Long>()
         val mediaSource = item.mediaSources.firstOrNull()
         if (mediaSource != null) {
             val imageCodecs = setOf(
@@ -839,7 +986,7 @@ internal fun startDownload(
                     )
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(false)
-                dm.enqueue(subRequest)
+                subtitleDownloadIds.add(dm.enqueue(subRequest))
                 moviesDir?.let { subtitlePaths.add(java.io.File(it, subSubPath).absolutePath) }
             }
         }
@@ -887,7 +1034,8 @@ internal fun startDownload(
                 sizeBytes = expectedSize,
                 isOriginalQuality = isOriginal,
                 maxBitrate = maxBitrate,
-                subtitlePaths = subtitlePaths
+                subtitlePaths = subtitlePaths,
+                subtitleDownloadIds = subtitleDownloadIds
             )
         )
 

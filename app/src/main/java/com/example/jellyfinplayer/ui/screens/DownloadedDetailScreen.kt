@@ -166,6 +166,24 @@ fun DownloadedDetailScreen(
                     )
                 }
             }
+            if (downloadStatus.isInFlight) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { onDelete(record) },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    modifier = Modifier
+                        .tabletContentWidth()
+                        .align(Alignment.CenterHorizontally)
+                        .padding(horizontal = 20.dp)
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text("Cancel download", fontWeight = FontWeight.SemiBold)
+                }
+            }
             if (downloadStatus.state == DownloadStatus.State.Failed) {
                 OutlinedButton(
                     onClick = {

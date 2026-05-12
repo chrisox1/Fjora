@@ -93,7 +93,6 @@ fun LibraryScreen(
     val libraries = vm.libraries.collectAsState().value
     val selectedLibraryId = vm.selectedLibraryId.collectAsState().value
     val searchQuery = vm.searchQuery.collectAsState().value
-    val searchResults = vm.searchResults.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
     val downloads = vm.downloads.collectAsState().value
     var viewMode by remember { mutableStateOf(LibraryViewMode.HOME) }
@@ -198,12 +197,19 @@ fun LibraryScreen(
             }
         }
     }
-    val visibleSearchResults = remember(searchResults, selectedLibraryId, items) {
-        if (selectedLibraryId == null) {
-            searchResults
+    val visibleSearchResults = remember(items, searchQuery) {
+        val query = searchQuery.trim()
+        if (query.isBlank()) {
+            emptyList()
         } else {
-            val currentLibraryIds = items.asSequence().map { it.id }.toSet()
-            searchResults.filter { it.id in currentLibraryIds }
+            items.filter { item ->
+                (item.type == "Movie" || item.type == "Series") &&
+                    (
+                        item.name.contains(query, ignoreCase = true) ||
+                            item.productionYear?.toString()?.contains(query) == true ||
+                            item.communityRating?.let { "%.1f".format(it) }?.contains(query) == true
+                    )
+            }
         }
     }
     val groupedDownloads = remember(downloads) {
@@ -320,9 +326,10 @@ fun LibraryScreen(
             // DownloadManager's database. dm.remove() does both in one call.
             val dm = context.getSystemService(android.content.Context.DOWNLOAD_SERVICE)
                 as? android.app.DownloadManager
-            dm?.remove(rec.downloadId)
+            dm?.remove(*listOf(rec.downloadId).plus(rec.subtitleDownloadIds).toLongArray())
             // Delete the file if it landed on disk.
             rec.filePath?.let { java.io.File(it).delete() }
+            rec.subtitlePaths.forEach { java.io.File(it).delete() }
         }
         // Remove the metadata record regardless of whether file deletion
         // succeeded — orphaned records are worse than orphaned files.
@@ -494,13 +501,8 @@ fun LibraryScreen(
                                             Spacer(Modifier.height(1.dp))
                                         }
                                     }
-                                    // Show a subtle inline spinner while a
-                                    // request is in flight (or while we're
-                                    // waiting for the debounce to fire).
-                                    // Without this, "No matches" briefly
-                                    // appears between the user finishing
-                                    // typing and the results landing.
-                                    searchInFlight && visibleSearchResults.isEmpty() -> {
+                                    searchInFlight && items.isEmpty() &&
+                                        visibleSearchResults.isEmpty() -> {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             Box(
                                                 Modifier
@@ -607,6 +609,7 @@ fun LibraryScreen(
                                             item,
                                             vm,
                                             onClick = { handleClick(item) },
+                                            showTypeBadge = false,
                                             modifier = Modifier.animateItemPlacement()
                                         )
                                     }
@@ -1738,6 +1741,18 @@ private fun DownloadCard(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
+                            Spacer(Modifier.height(10.dp))
+                            Button(
+                                onClick = { onDelete() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color.White,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Cancel", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }
@@ -1804,13 +1819,21 @@ private fun DownloadCard(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete download?") },
-            text = { Text("\"${record.title}\" will be removed from your device.") },
+            title = { Text(if (status.isInFlight) "Cancel download?" else "Delete download?") },
+            text = {
+                Text(
+                    if (status.isInFlight) {
+                        "\"${record.title}\" will stop downloading and be removed from this device."
+                    } else {
+                        "\"${record.title}\" will be removed from your device."
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteDialog = false
                     onDelete()
-                }) { Text("Delete", color = cs.error) }
+                }) { Text(if (status.isInFlight) "Cancel" else "Delete", color = cs.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }

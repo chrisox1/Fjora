@@ -446,8 +446,13 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                     // delete on the grid.
                     val dm = activity?.getSystemService(android.content.Context.DOWNLOAD_SERVICE)
                         as? android.app.DownloadManager
-                    runCatching { dm?.remove(rec.downloadId) }
+                    runCatching {
+                        dm?.remove(*listOf(rec.downloadId).plus(rec.subtitleDownloadIds).toLongArray())
+                    }
                     rec.filePath?.let { p ->
+                        runCatching { java.io.File(p).delete() }
+                    }
+                    rec.subtitlePaths.forEach { p ->
                         runCatching { java.io.File(p).delete() }
                     }
                     vm.removeDownload(rec.downloadId)

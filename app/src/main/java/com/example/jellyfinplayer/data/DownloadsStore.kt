@@ -81,7 +81,9 @@ class DownloadsStore(private val context: Context) {
         /** When the download was initiated (epoch millis). */
         val createdAt: Long = System.currentTimeMillis(),
         /** Absolute paths to downloaded subtitle files, keyed by download order. */
-        val subtitlePaths: List<String> = emptyList()
+        val subtitlePaths: List<String> = emptyList(),
+        /** DownloadManager ids for sidecar subtitle downloads, cancelled with the video. */
+        val subtitleDownloadIds: List<Long> = emptyList()
     )
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

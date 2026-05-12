@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
+import com.example.jellyfinplayer.BuildConfig
 import com.example.jellyfinplayer.data.AppBackgroundColor
 import com.example.jellyfinplayer.data.AppThemeColor
 import com.example.jellyfinplayer.data.AuthStore
@@ -53,6 +54,7 @@ fun SettingsScreen(
     var showSubtitleColorDialog by remember { mutableStateOf(false) }
     var showHeroSourceDialog by remember { mutableStateOf(false) }
     var showDownloadLimitDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthStore.AccountRecord?>(null) }
     var showSignOutAllConfirm by remember { mutableStateOf(false) }
 
@@ -283,6 +285,15 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(32.dp))
 
+            SectionLabel("About")
+            ClickableRow(
+                label = "Fjora",
+                value = "Version ${BuildConfig.VERSION_NAME}",
+                onClick = { showAboutDialog = true }
+            )
+
+            Spacer(Modifier.height(32.dp))
+
             // Destructive: sign out of every account at once. The single-
             // account "delete this account" lives on each account row above.
             Button(
@@ -379,6 +390,13 @@ fun SettingsScreen(
                 showDownloadLimitDialog = false
             },
             onDismiss = { showDownloadLimitDialog = false }
+        )
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(
+            onOpenGithub = { openGithub(context) },
+            onDismiss = { showAboutDialog = false }
         )
     }
 
@@ -882,6 +900,50 @@ private fun exportDiagnostics(ctx: android.content.Context) {
             android.widget.Toast.LENGTH_LONG
         ).show()
     }
+}
+
+@Composable
+private fun AboutDialog(
+    onOpenGithub: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("About Fjora", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text(
+                    "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "A third-party Jellyfin player. Fjora is not affiliated with Jellyfin.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                TextButton(
+                    onClick = onOpenGithub,
+                    contentPadding = PaddingValues(horizontal = 0.dp)
+                ) {
+                    Text("github.com/chrisox1/Fjora", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        shape = RoundedCornerShape(12.dp)
+    )
+}
+
+private fun openGithub(ctx: android.content.Context) {
+    val intent = android.content.Intent(
+        android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse("https://github.com/chrisox1/Fjora")
+    )
+    runCatching { ctx.startActivity(intent) }
 }
 
 private val downloadLimitOptions = listOf(

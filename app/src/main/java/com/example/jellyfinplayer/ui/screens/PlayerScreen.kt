@@ -15,8 +15,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -1106,45 +1108,50 @@ fun PlayerScreen(
                         }
                     },
                     actions = {
-                        if (controlsLocked) {
-                            PlayerLockButton(
-                                locked = true,
-                                onToggle = { controlsLocked = false; chromeVisible = true }
-                            )
-                        } else {
-                            if (activity != null && supportsPip(activity)) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (controlsLocked) {
+                                PlayerLockButton(
+                                    locked = true,
+                                    onToggle = { controlsLocked = false; chromeVisible = true }
+                                )
+                            } else {
+                                if (activity != null && supportsPip(activity)) {
+                                    IconButton(onClick = {
+                                        enterPip(
+                                            activity = activity,
+                                            player = player,
+                                            hasNext = nextEpisode != null && onPlayNext != null
+                                        )
+                                    }) {
+                                        Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture")
+                                    }
+                                }
+                                if (localFilePath == null) {
+                                    IconButton(onClick = { showQualityMenu = true }) {
+                                        Icon(Icons.Default.HighQuality, contentDescription = "Quality")
+                                    }
+                                }
+                                PlayerLockButton(
+                                    locked = false,
+                                    onToggle = { controlsLocked = true; chromeVisible = false }
+                                )
                                 IconButton(onClick = {
-                                    enterPip(
-                                        activity = activity,
-                                        player = player,
-                                        hasNext = nextEpisode != null && onPlayNext != null
-                                    )
+                                    fillMode = FillMode.values()[(fillMode.ordinal + 1) % FillMode.values().size]
                                 }) {
-                                    Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture")
+                                    Icon(Icons.Default.AspectRatio, contentDescription = "Sizing: ${fillMode.label}")
                                 }
-                            }
-                            if (localFilePath == null) {
-                                IconButton(onClick = { showQualityMenu = true }) {
-                                    Icon(Icons.Default.HighQuality, contentDescription = "Quality")
+                                IconButton(onClick = { showSpeedMenu = true }) {
+                                    Icon(Icons.Default.Speed, contentDescription = "Playback speed")
                                 }
-                            }
-                            PlayerLockButton(
-                                locked = false,
-                                onToggle = { controlsLocked = true; chromeVisible = false }
-                            )
-                            IconButton(onClick = {
-                                fillMode = FillMode.values()[(fillMode.ordinal + 1) % FillMode.values().size]
-                            }) {
-                                Icon(Icons.Default.AspectRatio, contentDescription = "Sizing: ${fillMode.label}")
-                            }
-                            IconButton(onClick = { showSpeedMenu = true }) {
-                                Icon(Icons.Default.Speed, contentDescription = "Playback speed")
-                            }
-                            IconButton(onClick = { showAudioMenu = true }) {
-                                Icon(Icons.Default.Audiotrack, contentDescription = "Audio track")
-                            }
-                            IconButton(onClick = { showSubMenu = true }) {
-                                Icon(Icons.Default.Subtitles, contentDescription = "Subtitles")
+                                IconButton(onClick = { showAudioMenu = true }) {
+                                    Icon(Icons.Default.Audiotrack, contentDescription = "Audio track")
+                                }
+                                IconButton(onClick = { showSubMenu = true }) {
+                                    Icon(Icons.Default.Subtitles, contentDescription = "Subtitles")
+                                }
                             }
                         }
                     },
