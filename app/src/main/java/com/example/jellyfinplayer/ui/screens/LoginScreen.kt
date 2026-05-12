@@ -1,7 +1,6 @@
 package com.example.jellyfinplayer.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,9 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,7 +26,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.QuickConnectState
-import com.example.jellyfinplayer.R
 import com.example.jellyfinplayer.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,39 +111,29 @@ fun LoginScreen(
                 .align(Alignment.TopCenter)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
-                .padding(top = 54.dp, bottom = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(top = 80.dp, bottom = 32.dp),
+            horizontalAlignment = Alignment.Start
         ) {
-            Image(
-                painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                contentDescription = "Fjora",
-                modifier = Modifier.size(92.dp)
-            )
-            Spacer(Modifier.height(14.dp))
             Text(
                 "Sign in",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = cs.onBackground,
-                textAlign = TextAlign.Center
+                color = cs.onBackground
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 "Connect to your Jellyfin server",
                 style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                color = cs.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(40.dp))
 
             Text(
                 "Server",
                 style = MaterialTheme.typography.labelLarge,
                 color = cs.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
             // Scheme picker — two chips side-by-side. Default is http because
             // most home Jellyfin servers run on plain HTTP within the LAN.
@@ -159,13 +145,13 @@ fun LoginScreen(
                     selected = scheme == "http",
                     onClick = { scheme = "http" },
                     label = { Text("http://") },
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(8.dp)
                 )
                 FilterChip(
                     selected = scheme == "https",
                     onClick = { scheme = "https" },
                     label = { Text("https://") },
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(8.dp)
                 )
             }
             OutlinedTextField(
@@ -186,7 +172,7 @@ fun LoginScreen(
                     imeAction = ImeAction.Next
                 ),
                 keyboardActions = KeyboardActions(onNext = { userFocus.requestFocus() }),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(Modifier.height(20.dp))
@@ -195,9 +181,7 @@ fun LoginScreen(
                 "Username",
                 style = MaterialTheme.typography.labelLarge,
                 color = cs.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
             OutlinedTextField(
                 value = user,
@@ -208,7 +192,7 @@ fun LoginScreen(
                     .focusRequester(userFocus),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { passFocus.requestFocus() }),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(Modifier.height(20.dp))
@@ -217,9 +201,7 @@ fun LoginScreen(
                 "Password",
                 style = MaterialTheme.typography.labelLarge,
                 color = cs.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
             OutlinedTextField(
                 value = pass,
@@ -242,7 +224,7 @@ fun LoginScreen(
                     imeAction = ImeAction.Go
                 ),
                 keyboardActions = KeyboardActions(onGo = { submit() }),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(8.dp)
             )
 
             Spacer(Modifier.height(28.dp))
@@ -252,8 +234,8 @@ fun LoginScreen(
                 enabled = canSubmit,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(50)
+                    .height(48.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
                 if (state is UiState.Loading) {
                     CircularProgressIndicator(
@@ -299,8 +281,8 @@ private fun QuickConnectPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = cs.surfaceVariant.copy(alpha = 0.34f),
+        shape = RoundedCornerShape(10.dp),
+        color = cs.surfaceVariant.copy(alpha = 0.55f),
         contentColor = cs.onSurface,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -331,10 +313,8 @@ private fun QuickConnectPanel(
                     OutlinedButton(
                         onClick = onStart,
                         enabled = enabled,
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Use Quick Connect", fontWeight = FontWeight.SemiBold)
                     }
@@ -373,10 +353,8 @@ private fun QuickConnectPanel(
                     OutlinedButton(
                         onClick = onStart,
                         enabled = enabled,
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Try again", fontWeight = FontWeight.SemiBold)
                     }
