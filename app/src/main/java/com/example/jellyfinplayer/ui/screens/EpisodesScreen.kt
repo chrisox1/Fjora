@@ -274,7 +274,14 @@ private fun EpisodesContent(
         // been enriched with the People list; before that it's empty and
         // CastRow returns early without taking layout space.
         if (series.people.isNotEmpty()) {
-            item { CastRow(vm = vm, people = series.people, onPersonClick = onPersonClick) }
+            item {
+                CastRow(
+                    vm = vm,
+                    people = series.people,
+                    onPersonClick = onPersonClick,
+                    compact = true
+                )
+            }
         }
         // Episode list section — shows loading state inline so the hero
         // stays visible during the fetch. Empty/error states only apply

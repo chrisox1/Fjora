@@ -57,7 +57,8 @@ fun CastRow(vm: AppViewModel, people: List<Person>) {
 fun CastRow(
     vm: AppViewModel,
     people: List<Person>,
-    onPersonClick: (Person) -> Unit
+    onPersonClick: (Person) -> Unit,
+    compact: Boolean = false
 ) {
     if (people.isEmpty()) return
     val ordered = remember(people) {
@@ -107,25 +108,35 @@ fun CastRow(
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 14.dp)
         ) {
             // Use a synthetic key (id + index) as a final defensive layer
             // so even if dedupe somehow misses an edge case, the LazyRow
             // can never crash on duplicate keys. The index suffix makes
             // every key unique by construction.
             itemsIndexed(ordered, key = { i, p -> "${p.id}#$i" }) { _, person ->
-                PersonCard(vm = vm, person = person, onClick = { onPersonClick(person) })
+                PersonCard(
+                    vm = vm,
+                    person = person,
+                    compact = compact,
+                    onClick = { onPersonClick(person) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PersonCard(vm: AppViewModel, person: Person, onClick: () -> Unit) {
+private fun PersonCard(
+    vm: AppViewModel,
+    person: Person,
+    compact: Boolean,
+    onClick: () -> Unit
+) {
     val cs = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
-            .width(104.dp)
+            .width(if (compact) 104.dp else 118.dp)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.Start
     ) {
@@ -150,11 +161,11 @@ private fun PersonCard(vm: AppViewModel, person: Person, onClick: () -> Unit) {
                     imageVector = Icons.Default.Person,
                     contentDescription = null,
                     tint = cs.onSurfaceVariant,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(if (compact) 34.dp else 38.dp)
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(if (compact) 6.dp else 7.dp))
         Text(
             person.name,
             style = MaterialTheme.typography.bodySmall,

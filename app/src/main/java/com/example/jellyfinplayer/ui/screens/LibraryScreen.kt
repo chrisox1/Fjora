@@ -64,6 +64,12 @@ import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
 
 private enum class LibraryViewMode(val title: String) { HOME(""), MOVIES("Movies"), SHOWS("Shows") }
 
+private object LibraryNavigationSnapshot {
+    var viewMode: LibraryViewMode = LibraryViewMode.HOME
+    var firstVisibleItemIndex: Int = 0
+    var firstVisibleItemScrollOffset: Int = 0
+}
+
 private enum class MediaSortKey(val label: String) {
     TITLE("Title"),
     IMDB_RATING("IMDB Rating"),
@@ -95,14 +101,30 @@ fun LibraryScreen(
     val searchQuery = vm.searchQuery.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
     val downloads = vm.downloads.collectAsState().value
-    var viewMode by remember { mutableStateOf(LibraryViewMode.HOME) }
+    var viewMode by remember { mutableStateOf(LibraryNavigationSnapshot.viewMode) }
     var sortKey by remember { mutableStateOf(MediaSortKey.TITLE) }
     var sortAscending by remember { mutableStateOf(true) }
     var showSortDialog by remember { mutableStateOf(false) }
     var fullListSearchOpen by remember { mutableStateOf(false) }
     var fullListSearchQuery by remember { mutableStateOf("") }
-    var homeReturnIndex by remember { mutableIntStateOf(0) }
-    var homeReturnOffset by remember { mutableIntStateOf(0) }
+    var homeReturnIndex by remember {
+        mutableIntStateOf(
+            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
+                LibraryNavigationSnapshot.firstVisibleItemIndex
+            } else {
+                0
+            }
+        )
+    }
+    var homeReturnOffset by remember {
+        mutableIntStateOf(
+            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
+                LibraryNavigationSnapshot.firstVisibleItemScrollOffset
+            } else {
+                0
+            }
+        )
+    }
     var searchOpen by remember { mutableStateOf(false) }
     var showServerInfoDialog by remember { mutableStateOf(false) }
     var refreshRequested by remember { mutableStateOf(false) }
@@ -165,6 +187,9 @@ fun LibraryScreen(
         fullListSearchQuery = ""
         homeReturnIndex = 0
         homeReturnOffset = 0
+        LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
+        LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
     }
 
     val latestMovies = remember(items) {
@@ -230,9 +255,15 @@ fun LibraryScreen(
             hasNextUpItems = nextUp.isNotEmpty()
         )
     }
-    val gridState = rememberLazyGridState()
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = LibraryNavigationSnapshot.firstVisibleItemIndex,
+        initialFirstVisibleItemScrollOffset = LibraryNavigationSnapshot.firstVisibleItemScrollOffset
+    )
+    var skipInitialViewModeScroll by remember { mutableStateOf(true) }
     LaunchedEffect(viewMode) {
-        if (viewMode == LibraryViewMode.HOME) {
+        if (skipInitialViewModeScroll) {
+            skipInitialViewModeScroll = false
+        } else if (viewMode == LibraryViewMode.HOME) {
             fullListSearchOpen = false
             fullListSearchQuery = ""
             gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
@@ -240,9 +271,17 @@ fun LibraryScreen(
             gridState.animateScrollToItem(0)
         }
     }
+    fun saveLibraryPosition() {
+        LibraryNavigationSnapshot.viewMode = viewMode
+        LibraryNavigationSnapshot.firstVisibleItemIndex = gridState.firstVisibleItemIndex
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
+    }
     val openFullList: (LibraryViewMode) -> Unit = { mode ->
         homeReturnIndex = gridState.firstVisibleItemIndex
         homeReturnOffset = gridState.firstVisibleItemScrollOffset
+        LibraryNavigationSnapshot.viewMode = mode
+        LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
         fullListSearchOpen = false
         fullListSearchQuery = ""
         showSortDialog = false
@@ -297,6 +336,7 @@ fun LibraryScreen(
 
     val handleClick: (MediaItem) -> Unit = { picked ->
         keyboard?.hide()
+        saveLibraryPosition()
         // Eagerly warm the image cache for the detail screen's hero before
         // we navigate. By the time MovieDetail / Episodes mounts, both the
         // poster and backdrop are likely in Coil's memory cache, so the
@@ -562,6 +602,7 @@ fun LibraryScreen(
                                             is DownloadEntry.Movie -> DownloadCard(
                                                 record = entry.record,
                                                 onClick = {
+                                                    saveLibraryPosition()
                                                     warmDownloadImages(
                                                         context = context,
                                                         imageLoader = imageLoader,
@@ -576,6 +617,7 @@ fun LibraryScreen(
                                             is DownloadEntry.SeriesGroup -> SeriesDownloadCard(
                                                 group = entry,
                                                 onClick = {
+                                                    saveLibraryPosition()
                                                     warmDownloadImages(
                                                         context = context,
                                                         imageLoader = imageLoader,
