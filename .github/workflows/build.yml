@@ -36,6 +36,13 @@ jobs:
           fi
           chmod +x gradlew
 
+      - name: Extract version name
+        id: version
+        run: |
+          VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Detected version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
 
@@ -60,20 +67,20 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: fjora-v0.1.0-beta-debug-apks
+          name: fjora-v${{ steps.version.outputs.version }}-debug-apks
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: fjora-v0.1.0-beta-release-apks
+          name: fjora-v${{ steps.version.outputs.version }}-release-apks
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: fjora-v0.1.0-beta-release-aab
+          name: fjora-v${{ steps.version.outputs.version }}-release-aab
           path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
