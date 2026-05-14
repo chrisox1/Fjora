@@ -33,6 +33,15 @@ class SettingsStore(private val context: Context) {
         val SUBTITLE_BACKGROUND = booleanPreferencesKey("subtitle_background")
         val SUBTITLE_DELAY_MS = longPreferencesKey("subtitle_delay_ms")
         val DOWNLOAD_STORAGE_LIMIT_BYTES = longPreferencesKey("download_storage_limit_bytes")
+        val INCLUDE_EPISODES_IN_SEARCH = booleanPreferencesKey("include_episodes_in_search")
+        val IMAGE_CACHE_LIMIT_BYTES = longPreferencesKey("image_cache_limit_bytes")
+
+        /**
+         * Vertical position of the subtitle text, as a fraction of the player
+         * view's height measured from the BOTTOM edge. 0.0 = sitting on the
+         * bottom edge, 1.0 = top of the screen. Sensible range ≈ 0.03–0.35.
+         */
+        val SUBTITLE_POSITION_FRACTION = floatPreferencesKey("subtitle_position_fraction")
     }
 
     data class Settings(
@@ -59,7 +68,13 @@ class SettingsStore(private val context: Context) {
         val subtitleColor: String,
         val subtitleBackground: Boolean,
         val subtitleDelayMs: Long,
-        val downloadStorageLimitBytes: Long?
+        val downloadStorageLimitBytes: Long?,
+        /** When on, global search also returns individual episodes (default off). */
+        val includeEpisodesInSearch: Boolean,
+        /** Hard cap on Coil's on-disk image cache. Null = use the default (250 MB). */
+        val imageCacheLimitBytes: Long?,
+        /** Subtitle vertical position as fraction of view height from bottom (0.03..0.35). */
+        val subtitlePositionFraction: Float
     )
 
     val flow: Flow<Settings> = context.settingsDataStore.data.map { prefs ->
@@ -84,7 +99,11 @@ class SettingsStore(private val context: Context) {
             subtitleColor = prefs[SUBTITLE_COLOR]?.takeIf { it.isNotBlank() } ?: "white",
             subtitleBackground = prefs[SUBTITLE_BACKGROUND] ?: false,
             subtitleDelayMs = (prefs[SUBTITLE_DELAY_MS] ?: 0L).coerceIn(-5_000L, 5_000L),
-            downloadStorageLimitBytes = prefs[DOWNLOAD_STORAGE_LIMIT_BYTES]?.takeIf { it > 0L }
+            downloadStorageLimitBytes = prefs[DOWNLOAD_STORAGE_LIMIT_BYTES]?.takeIf { it > 0L },
+            includeEpisodesInSearch = prefs[INCLUDE_EPISODES_IN_SEARCH] ?: false,
+            imageCacheLimitBytes = prefs[IMAGE_CACHE_LIMIT_BYTES]?.takeIf { it > 0L },
+            subtitlePositionFraction = (prefs[SUBTITLE_POSITION_FRACTION] ?: 0.08f)
+                .coerceIn(0.03f, 0.35f)
         )
     }
 
@@ -195,6 +214,25 @@ class SettingsStore(private val context: Context) {
         context.settingsDataStore.edit { prefs ->
             if (bytes == null || bytes <= 0L) prefs.remove(DOWNLOAD_STORAGE_LIMIT_BYTES)
             else prefs[DOWNLOAD_STORAGE_LIMIT_BYTES] = bytes
+        }
+    }
+
+    suspend fun setIncludeEpisodesInSearch(enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[INCLUDE_EPISODES_IN_SEARCH] = enabled
+        }
+    }
+
+    suspend fun setImageCacheLimitBytes(bytes: Long?) {
+        context.settingsDataStore.edit { prefs ->
+            if (bytes == null || bytes <= 0L) prefs.remove(IMAGE_CACHE_LIMIT_BYTES)
+            else prefs[IMAGE_CACHE_LIMIT_BYTES] = bytes
+        }
+    }
+
+    suspend fun setSubtitlePositionFraction(fraction: Float) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[SUBTITLE_POSITION_FRACTION] = fraction.coerceIn(0.03f, 0.35f)
         }
     }
 }

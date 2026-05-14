@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -68,6 +69,30 @@ private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
     var firstVisibleItemIndex: Int = 0
     var firstVisibleItemScrollOffset: Int = 0
+}
+
+/**
+ * Horizontal scroll positions for the home-screen rows. Module-level so they
+ * survive LibraryScreen being unmounted while the user is on a detail screen
+ * — that way "go back" returns the user to the exact card they tapped on
+ * inside each row.
+ *
+ * Stored as `(firstVisibleItemIndex, firstVisibleItemScrollOffset)` pairs.
+ * Reset to `0 to 0` when the user switches libraries or logs out.
+ */
+private object LatestRowsScrollSnapshot {
+    var continueWatching: Pair<Int, Int> = 0 to 0
+    var nextUp: Pair<Int, Int> = 0 to 0
+    var homeRow: Pair<Int, Int> = 0 to 0
+    var latestMovies: Pair<Int, Int> = 0 to 0
+    var latestShows: Pair<Int, Int> = 0 to 0
+    fun reset() {
+        continueWatching = 0 to 0
+        nextUp = 0 to 0
+        homeRow = 0 to 0
+        latestMovies = 0 to 0
+        latestShows = 0 to 0
+    }
 }
 
 private enum class MediaSortKey(val label: String) {
@@ -190,6 +215,7 @@ fun LibraryScreen(
         LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
         LibraryNavigationSnapshot.firstVisibleItemIndex = 0
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+        LatestRowsScrollSnapshot.reset()
     }
 
     val latestMovies = remember(items) {
@@ -266,15 +292,75 @@ fun LibraryScreen(
         } else if (viewMode == LibraryViewMode.HOME) {
             fullListSearchOpen = false
             fullListSearchQuery = ""
-            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
+            // Instant scroll so coming back to the home grid lands exactly
+            // where the user left off — animated scroll here read as a
+            // "swipe down" jolt.
+            gridState.scrollToItem(homeReturnIndex, homeReturnOffset)
         } else {
-            gridState.animateScrollToItem(0)
+            gridState.scrollToItem(0)
         }
     }
     fun saveLibraryPosition() {
         LibraryNavigationSnapshot.viewMode = viewMode
         LibraryNavigationSnapshot.firstVisibleItemIndex = gridState.firstVisibleItemIndex
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
+    }
+
+    // Persistent horizontal scroll states for the four home-screen rows.
+    // Their LazyListState is re-created when LibraryScreen unmounts (e.g.
+    // user navigates to a detail screen), so we mirror their scroll position
+    // into LatestRowsScrollSnapshot continuously via snapshotFlow. On
+    // remount, the new states initialize from the snapshot — restoring the
+    // user to the exact card they last tapped.
+    val continueWatchingRowState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.continueWatching.first,
+        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.continueWatching.second
+    )
+    val nextUpRowState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.nextUp.first,
+        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.nextUp.second
+    )
+    val homeRowState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.homeRow.first,
+        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.homeRow.second
+    )
+    val latestMoviesState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.latestMovies.first,
+        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.latestMovies.second
+    )
+    val latestShowsState = rememberLazyListState(
+        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.latestShows.first,
+        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.latestShows.second
+    )
+    LaunchedEffect(continueWatchingRowState) {
+        snapshotFlow {
+            continueWatchingRowState.firstVisibleItemIndex to
+                continueWatchingRowState.firstVisibleItemScrollOffset
+        }.collect { LatestRowsScrollSnapshot.continueWatching = it }
+    }
+    LaunchedEffect(nextUpRowState) {
+        snapshotFlow {
+            nextUpRowState.firstVisibleItemIndex to
+                nextUpRowState.firstVisibleItemScrollOffset
+        }.collect { LatestRowsScrollSnapshot.nextUp = it }
+    }
+    LaunchedEffect(homeRowState) {
+        snapshotFlow {
+            homeRowState.firstVisibleItemIndex to
+                homeRowState.firstVisibleItemScrollOffset
+        }.collect { LatestRowsScrollSnapshot.homeRow = it }
+    }
+    LaunchedEffect(latestMoviesState) {
+        snapshotFlow {
+            latestMoviesState.firstVisibleItemIndex to
+                latestMoviesState.firstVisibleItemScrollOffset
+        }.collect { LatestRowsScrollSnapshot.latestMovies = it }
+    }
+    LaunchedEffect(latestShowsState) {
+        snapshotFlow {
+            latestShowsState.firstVisibleItemIndex to
+                latestShowsState.firstVisibleItemScrollOffset
+        }.collect { LatestRowsScrollSnapshot.latestShows = it }
     }
     val openFullList: (LibraryViewMode) -> Unit = { mode ->
         homeReturnIndex = gridState.firstVisibleItemIndex
@@ -686,7 +772,8 @@ fun LibraryScreen(
                                                 items = continueWatching,
                                                 vm = vm,
                                                 showProgress = true,
-                                                onItemClick = handleClick
+                                                onItemClick = handleClick,
+                                                state = continueWatchingRowState
                                             )
                                         }
                                     }
@@ -699,7 +786,8 @@ fun LibraryScreen(
                                                 items = nextUp,
                                                 vm = vm,
                                                 showProgress = false,
-                                                onItemClick = handleClick
+                                                onItemClick = handleClick,
+                                                state = nextUpRowState
                                             )
                                         }
                                     }
@@ -712,7 +800,8 @@ fun LibraryScreen(
                                             items = homeRow,
                                             vm = vm,
                                             showProgress = true,
-                                            onItemClick = handleClick
+                                            onItemClick = handleClick,
+                                            state = homeRowState
                                         )
                                     }
                                 }
@@ -732,7 +821,8 @@ fun LibraryScreen(
                                                 items = latestMovies.take(20),
                                                 vm = vm,
                                                 onViewAll = { openFullList(LibraryViewMode.MOVIES) },
-                                                onItemClick = handleClick
+                                                onItemClick = handleClick,
+                                                state = latestMoviesState
                                             )
                                         }
                                     }
@@ -743,7 +833,8 @@ fun LibraryScreen(
                                                 items = latestShows.take(20),
                                                 vm = vm,
                                                 onViewAll = { openFullList(LibraryViewMode.SHOWS) },
-                                                onItemClick = handleClick
+                                                onItemClick = handleClick,
+                                                state = latestShowsState
                                             )
                                         }
                                     }
@@ -891,7 +982,14 @@ private fun SortDialog(
                         shape = RoundedCornerShape(50)
                     )
                 }
-                MediaSortKey.values().forEach { key ->
+                // Render the currently-selected sort key at the top of the
+                // list, then the rest in their natural enum order. Keeps the
+                // user's current choice anchored to the top of the dialog
+                // instead of drifting into the middle of the option list.
+                val orderedKeys = remember(selectedKey) {
+                    listOf(selectedKey) + MediaSortKey.values().filter { it != selectedKey }
+                }
+                orderedKeys.forEach { key ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1229,7 +1327,9 @@ private fun LatestMediaRow(
     items: List<MediaItem>,
     vm: AppViewModel,
     onViewAll: () -> Unit,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
+    state: androidx.compose.foundation.lazy.LazyListState =
+        androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     Column(Modifier.padding(top = 14.dp)) {
         Row(
@@ -1250,6 +1350,7 @@ private fun LatestMediaRow(
             }
         }
         LazyRow(
+            state = state,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(bottom = 2.dp)
         ) {
@@ -1272,9 +1373,12 @@ private fun WideRow(
     items: List<MediaItem>,
     vm: AppViewModel,
     showProgress: Boolean,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
+    state: androidx.compose.foundation.lazy.LazyListState =
+        androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
     LazyRow(
+        state = state,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(vertical = 4.dp)
     ) {

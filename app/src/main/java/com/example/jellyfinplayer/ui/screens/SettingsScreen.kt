@@ -54,6 +54,7 @@ fun SettingsScreen(
     var showSubtitleColorDialog by remember { mutableStateOf(false) }
     var showHeroSourceDialog by remember { mutableStateOf(false) }
     var showDownloadLimitDialog by remember { mutableStateOf(false) }
+    var showImageCacheLimitDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthStore.AccountRecord?>(null) }
     var showSignOutAllConfirm by remember { mutableStateOf(false) }
@@ -165,6 +166,13 @@ fun SettingsScreen(
                 checked = settings.showNextUpRow,
                 onCheckedChange = { vm.setShowNextUpRow(it) }
             )
+            ToggleRow(
+                label = "Include episodes in search",
+                description = "When on, the global search also returns individual " +
+                    "episodes. Off by default to keep results focused on movies and shows.",
+                checked = settings.includeEpisodesInSearch,
+                onCheckedChange = { vm.setIncludeEpisodesInSearch(it) }
+            )
 
             Spacer(Modifier.height(24.dp))
 
@@ -200,6 +208,16 @@ fun SettingsScreen(
                 value = settings.subtitleDelayMs.toFloat(),
                 valueRange = -5_000f..5_000f,
                 onValueChange = { vm.setSubtitleDelayMs((it / 250f).roundToInt() * 250L) }
+            )
+            // Vertical position slider — applies to both MPV (custom Compose
+            // overlay) and ExoPlayer (SubtitleView.setBottomPaddingFraction).
+            // Live-updates while video is playing.
+            SliderRow(
+                label = "Subtitle position",
+                valueLabel = "${(settings.subtitlePositionFraction * 100).roundToInt()}%",
+                value = settings.subtitlePositionFraction,
+                valueRange = 0.03f..0.35f,
+                onValueChange = { vm.setSubtitlePositionFraction(it) }
             )
             ToggleRow(
                 label = "Subtitle background",
@@ -263,6 +281,22 @@ fun SettingsScreen(
             )
             Text(
                 "When the limit is reached, new downloads are blocked until space is freed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            SectionLabel("Cache")
+            ClickableRow(
+                label = "Image cache limit",
+                value = imageCacheLimitLabel(settings.imageCacheLimitBytes),
+                onClick = { showImageCacheLimitDialog = true }
+            )
+            Text(
+                "Maximum disk space used for cached posters and backdrops. " +
+                    "Changes apply after the app is restarted.",
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
@@ -390,6 +424,17 @@ fun SettingsScreen(
                 showDownloadLimitDialog = false
             },
             onDismiss = { showDownloadLimitDialog = false }
+        )
+    }
+
+    if (showImageCacheLimitDialog) {
+        ImageCacheLimitDialog(
+            current = settings.imageCacheLimitBytes,
+            onSelect = {
+                vm.setImageCacheLimitBytes(it)
+                showImageCacheLimitDialog = false
+            },
+            onDismiss = { showImageCacheLimitDialog = false }
         )
     }
 
@@ -958,6 +1003,24 @@ private val downloadLimitOptions = listOf(
 private fun downloadLimitLabel(bytes: Long?): String =
     downloadLimitOptions.firstOrNull { it.first == bytes }?.second ?: "Custom"
 
+/**
+ * Image-cache size options. `null` resolves to the in-code default (250 MB)
+ * applied in JellyfinApp; the higher tiers let users with lots of artwork
+ * keep more in cache to avoid re-downloads when scrolling.
+ */
+private val imageCacheLimitOptions = listOf(
+    100L * 1024 * 1024 to "100 MB",
+    250L * 1024 * 1024 to "250 MB (default)",
+    500L * 1024 * 1024 to "500 MB",
+    1L * 1024 * 1024 * 1024 to "1 GB",
+    2L * 1024 * 1024 * 1024 to "2 GB"
+)
+
+private fun imageCacheLimitLabel(bytes: Long?): String {
+    if (bytes == null) return "250 MB (default)"
+    return imageCacheLimitOptions.firstOrNull { it.first == bytes }?.second ?: "Custom"
+}
+
 @Composable
 private fun DownloadLimitDialog(
     current: Long?,
@@ -980,6 +1043,40 @@ private fun DownloadLimitDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = selected, onClick = { onSelect(value) })
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ImageCacheLimitDialog(
+    current: Long?,
+    onSelect: (Long?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Image cache limit", fontWeight = FontWeight.SemiBold) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        text = {
+            Column {
+                imageCacheLimitOptions.forEach { (value, label) ->
+                    // null = default. The "250 MB (default)" entry matches null.
+                    val effectiveCurrent = current ?: 250L * 1024 * 1024
+                    val selected = value == effectiveCurrent
+                    val emit: Long? = if (value == 250L * 1024 * 1024) null else value
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(emit) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected, onClick = { onSelect(emit) })
                         Spacer(Modifier.width(8.dp))
                         Text(label, style = MaterialTheme.typography.bodyMedium)
                     }

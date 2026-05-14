@@ -283,12 +283,25 @@ class JellyfinRepository {
         a.getItemDetails(userId, itemId, authHeader())
     }
 
-    /** Search the user's library. Empty / blank query returns nothing. */
-    suspend fun search(query: String): List<MediaItem> = mapAuthErrors {
+    /**
+     * Search the user's library. Empty / blank query returns nothing.
+     *
+     * When `includeEpisodes` is true, individual `Episode` entries are also
+     * returned alongside Movies/Series — useful for jumping to a remembered
+     * episode by name. The server-side `IncludeItemTypes` filter and the
+     * client-side type filter are kept in sync.
+     */
+    suspend fun search(
+        query: String,
+        includeEpisodes: Boolean = false
+    ): List<MediaItem> = mapAuthErrors {
         if (query.isBlank()) return@mapAuthErrors emptyList()
         val a = api ?: error("Call configure() first")
-        a.search(userId, authHeader(), query.trim()).items
-            .filter { it.type == "Movie" || it.type == "Series" }
+        val includeTypes = if (includeEpisodes) "Movie,Series,Episode" else "Movie,Series"
+        a.search(userId, authHeader(), query.trim(), includeTypes).items.filter {
+            it.type == "Movie" || it.type == "Series" ||
+                (includeEpisodes && it.type == "Episode")
+        }
     }
 
     /** Items in progress — feeds the "Continue Watching" row. */

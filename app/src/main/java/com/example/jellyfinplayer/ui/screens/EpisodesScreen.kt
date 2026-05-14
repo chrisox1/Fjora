@@ -234,7 +234,10 @@ private fun EpisodesContent(
             if (!series.overview.isNullOrBlank()) 1 else 0 +
             if (series.people.isNotEmpty()) 1 else 0 +
             2
-        listState.animateScrollToItem((rowsBeforeEpisodes + episodeIndex - 2).coerceAtLeast(0))
+        // Instant scroll — coming back from the player, the user wants to
+        // land exactly on the episode they tapped, not watch the list scroll
+        // there. An animated scroll here read as a "swipe down" jolt.
+        listState.scrollToItem((rowsBeforeEpisodes + episodeIndex - 2).coerceAtLeast(0))
         scrolledToInitialEpisode = true
     }
 

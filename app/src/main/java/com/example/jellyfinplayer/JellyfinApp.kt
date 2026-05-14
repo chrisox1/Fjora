@@ -6,6 +6,9 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
+import com.example.jellyfinplayer.data.SettingsStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 /**
  * Application class — exists primarily to register a custom Coil ImageLoader
@@ -21,6 +24,14 @@ import coil.request.CachePolicy
  */
 class JellyfinApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
+        // Read the user's cache-size choice synchronously at startup. This
+        // blocks Application init for ~10–20 ms on first read which is fine —
+        // there's no UI yet to lag, and we need the value before constructing
+        // the ImageLoader. Changes only take effect on next app launch (the
+        // ImageLoader is built once).
+        val cacheLimitBytes = runCatching {
+            runBlocking { SettingsStore(this@JellyfinApp).flow.first().imageCacheLimitBytes }
+        }.getOrNull() ?: (250L * 1024 * 1024)
         return ImageLoader.Builder(this)
             // 200ms crossfade is the sweet spot — fast enough not to feel
             // sluggish on grid scrolls, slow enough to register as a fade
@@ -39,7 +50,7 @@ class JellyfinApp : Application(), ImageLoaderFactory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(250L * 1024 * 1024) // 250 MB on-disk
+                    .maxSizeBytes(cacheLimitBytes)
                     .build()
             }
             // Aggressive caching — the URLs include api_key, but the actual

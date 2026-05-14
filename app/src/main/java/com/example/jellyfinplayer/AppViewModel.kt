@@ -114,7 +114,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             subtitleColor = "white",
             subtitleBackground = false,
             subtitleDelayMs = 0L,
-            downloadStorageLimitBytes = null
+            downloadStorageLimitBytes = null,
+            includeEpisodesInSearch = false,
+            imageCacheLimitBytes = null,
+            subtitlePositionFraction = 0.08f
         )
     )
 
@@ -184,6 +187,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setDownloadStorageLimitBytes(bytes: Long?) {
         viewModelScope.launch { settingsStore.setDownloadStorageLimitBytes(bytes) }
+    }
+
+    fun setIncludeEpisodesInSearch(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setIncludeEpisodesInSearch(enabled) }
+    }
+
+    fun setImageCacheLimitBytes(bytes: Long?) {
+        viewModelScope.launch { settingsStore.setImageCacheLimitBytes(bytes) }
+    }
+
+    fun setSubtitlePositionFraction(fraction: Float) {
+        viewModelScope.launch { settingsStore.setSubtitlePositionFraction(fraction) }
     }
 
     /** Read-only server URL for display in settings. */
@@ -325,7 +340,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     return@onEach
                 }
                 _searching.value = true
-                runCatching { repo.search(q) }
+                val includeEpisodes = settings.value.includeEpisodesInSearch
+                runCatching { repo.search(q, includeEpisodes = includeEpisodes) }
                     .onSuccess { _searchResults.value = it }
                     .onFailure { t ->
                         if (t is AuthExpiredException) handleAuthExpired()

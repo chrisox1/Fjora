@@ -609,6 +609,26 @@ fun MpvPlayerScreen(
         "outro"
     )
 
+    // Auto-hide flags for the Skip-intro and Next-episode action buttons.
+    // While the corresponding segment is active they show for 10 s, then
+    // smoothly fade away. Any tap (chromeVisible flip) restarts the timer.
+    var skipIntroHidden by remember(item.id) { mutableStateOf(false) }
+    var nextEpisodeHidden by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(activeIntroSegment != null, chromeVisible) {
+        if (activeIntroSegment != null) {
+            skipIntroHidden = false
+            delay(10_000L)
+            skipIntroHidden = true
+        }
+    }
+    LaunchedEffect(activeCreditsSegment != null, chromeVisible) {
+        if (activeCreditsSegment != null) {
+            nextEpisodeHidden = false
+            delay(10_000L)
+            nextEpisodeHidden = true
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -736,8 +756,11 @@ fun MpvPlayerScreen(
         )
 
         // ── Top bar ──────────────────────────────────────────────────────────
+        // Suppressed in PiP — the title bar and action icons would otherwise
+        // render at full size inside the tiny PiP window for the second or two
+        // before they auto-hide, which read as "huge logos".
         AnimatedVisibility(
-            visible = chromeVisible,
+            visible = chromeVisible && !inPip,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -819,7 +842,7 @@ fun MpvPlayerScreen(
         val mpvLoading = !mpvFirstFrameReady || mpvBuffering ||
             (fileLoaded && durationMs == 0L)
         AnimatedVisibility(
-            visible = chromeVisible && !controlsLocked && !mpvLoading,
+            visible = chromeVisible && !controlsLocked && !mpvLoading && !inPip,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.Center)
@@ -906,7 +929,7 @@ fun MpvPlayerScreen(
 
         // ── Bottom time + seekbar ─────────────────────────────────────────────
         AnimatedVisibility(
-            visible = chromeVisible && !controlsLocked && !mpvLoading,
+            visible = chromeVisible && !controlsLocked && !mpvLoading && !inPip,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -998,7 +1021,14 @@ fun MpvPlayerScreen(
             }
             val scaledSubtitleFontSize = (baseSubtitleSp * settings.subtitleTextScale).sp
             val scaledSubtitleLineHeight = (baseSubtitleSp * 1.25f * settings.subtitleTextScale).sp
-            val subtitleBottomPadding = if (inPip) 10.dp else 42.dp
+            // User-controlled vertical position (fraction of screen height from
+            // the bottom edge). In PiP we ignore the setting and use a tight
+            // bottom margin so subtitles don't get pushed off the tiny window.
+            val subtitleBottomPadding = if (inPip) {
+                10.dp
+            } else {
+                (screenHeightDp * settings.subtitlePositionFraction).dp
+            }
             val subtitleSidePadding = if (inPip) 8.dp else 24.dp
             Box(
                 modifier = Modifier
@@ -1040,20 +1070,26 @@ fun MpvPlayerScreen(
             }
         }
 
-        if (!controlsLocked && activeIntroSegment != null) {
+        AnimatedVisibility(
+            visible = !controlsLocked && !inPip &&
+                activeIntroSegment != null && !skipIntroHidden,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 96.dp)
+        ) {
+            val segment = activeIntroSegment ?: return@AnimatedVisibility
             Button(
                 onClick = {
                     runCatching {
                         MPVLib.command(
-                            arrayOf("seek", (activeIntroSegment.endMs / 1000.0).toString(), "absolute")
+                            arrayOf("seek", (segment.endMs / 1000.0).toString(), "absolute")
                         )
                         resetMpvSubtitleTiming()
                     }
                 },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = 96.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White)
             ) {
                 Text("Skip intro", color = Color.Black)
@@ -1062,9 +1098,18 @@ fun MpvPlayerScreen(
 
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
-        if (!controlsLocked && activeCreditsSegment != null &&
-            creditsNext != null && creditsPlayNext != null
+        AnimatedVisibility(
+            visible = !controlsLocked && !inPip &&
+                activeCreditsSegment != null && !nextEpisodeHidden &&
+                creditsNext != null && creditsPlayNext != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 96.dp)
         ) {
+            if (creditsNext == null || creditsPlayNext == null) return@AnimatedVisibility
             Button(
                 onClick = {
                     if (!endedHandled) {
@@ -1072,11 +1117,7 @@ fun MpvPlayerScreen(
                         isNavigatingAway = true
                         creditsPlayNext(creditsNext)
                     }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = 96.dp)
+                }
             ) {
                 Text("Next episode")
             }
@@ -1213,8 +1254,11 @@ private suspend fun refreshMpvVideoOutput() {
     runCatching { MPVLib.setOptionString("force-window", "yes") }
     runCatching { MPVLib.setOptionString("vo", "gpu") }
     runCatching { MPVLib.setPropertyString("vo", "gpu") }
-    repeat(5) {
-        delay(120)
+    // Try the redraw seek IMMEDIATELY, then poll fast — the previous 120ms
+    // gap between retries made PiP-exit feel slow (≈2 s of black). MPV's
+    // time-pos is almost always valid in <100 ms after attachSurface.
+    repeat(8) { attempt ->
+        if (attempt > 0) delay(40)
         val pos = runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull()
         if (pos != null && pos >= 0.0) {
             runCatching { MPVLib.command(arrayOf("seek", pos.toString(), "absolute+exact")) }

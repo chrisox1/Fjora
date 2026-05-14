@@ -137,6 +137,16 @@ fun LoginScreen(
             )
             // Scheme picker — two chips side-by-side. Default is http because
             // most home Jellyfin servers run on plain HTTP within the LAN.
+            // Custom colors: avoid the theme's purple secondaryContainer when
+            // selected; use a neutral elevated surface tint instead so the
+            // chips don't read as accented.
+            val schemeChipColors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = cs.surfaceVariant,
+                selectedLabelColor = cs.onSurface,
+                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                labelColor = cs.onSurfaceVariant
+            )
+            val schemeChipBorder = androidx.compose.foundation.BorderStroke(1.dp, cs.outline)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -145,13 +155,17 @@ fun LoginScreen(
                     selected = scheme == "http",
                     onClick = { scheme = "http" },
                     label = { Text("http://") },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = schemeChipColors,
+                    border = schemeChipBorder
                 )
                 FilterChip(
                     selected = scheme == "https",
                     onClick = { scheme = "https" },
                     label = { Text("https://") },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = schemeChipColors,
+                    border = schemeChipBorder
                 )
             }
             OutlinedTextField(

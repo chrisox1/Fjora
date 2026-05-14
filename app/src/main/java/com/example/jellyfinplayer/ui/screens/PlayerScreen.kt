@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -960,6 +961,26 @@ fun PlayerScreen(
         "credits",
         "outro"
     )
+
+    // Auto-hide flags for the Skip-intro and Next-episode action buttons —
+    // shown for 10 s, then smoothly fade. Any tap (chromeVisible flip)
+    // restarts the timer.
+    var skipIntroHidden by remember(item.id) { mutableStateOf(false) }
+    var nextEpisodeHidden by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(activeIntroSegment != null, chromeVisible) {
+        if (activeIntroSegment != null) {
+            skipIntroHidden = false
+            delay(10_000L)
+            skipIntroHidden = true
+        }
+    }
+    LaunchedEffect(activeCreditsSegment != null, chromeVisible) {
+        if (activeCreditsSegment != null) {
+            nextEpisodeHidden = false
+            delay(10_000L)
+            nextEpisodeHidden = true
+        }
+    }
     val exoSubtitleFraction = remember(
         configuration.screenHeightDp,
         inPip,
@@ -1022,6 +1043,10 @@ fun PlayerScreen(
                                 setFractionalTextSize(
                                     exoSubtitleFraction
                                 )
+                                // User-controlled vertical position. The fraction
+                                // is "distance from bottom edge as a portion of
+                                // view height", matching the setting semantics.
+                                setBottomPaddingFraction(userSettings.subtitlePositionFraction)
                             }
                         }
                     },
@@ -1044,6 +1069,9 @@ fun PlayerScreen(
                             setFractionalTextSize(
                                 exoSubtitleFraction
                             )
+                            // Real-time update — re-invoked whenever
+                            // userSettings.subtitlePositionFraction changes.
+                            setBottomPaddingFraction(userSettings.subtitlePositionFraction)
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1328,14 +1356,20 @@ fun PlayerScreen(
             modifier = Modifier.matchParentSize().zIndex(6f)
         )
 
-        if (!controlsLocked && !inPip && activeIntroSegment != null) {
+        AnimatedVisibility(
+            visible = !controlsLocked && !inPip &&
+                activeIntroSegment != null && !skipIntroHidden,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .zIndex(5f)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 96.dp)
+        ) {
+            val segment = activeIntroSegment ?: return@AnimatedVisibility
             Button(
-                onClick = { player.seekTo(activeIntroSegment.endMs) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .zIndex(5f)
-                    .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = 96.dp),
+                onClick = { player.seekTo(segment.endMs) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White)
             ) {
                 Text("Skip intro", color = Color.Black)
@@ -1344,16 +1378,21 @@ fun PlayerScreen(
 
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
-        if (!controlsLocked && !inPip && activeCreditsSegment != null &&
-            creditsNext != null && creditsPlayNext != null
+        AnimatedVisibility(
+            visible = !controlsLocked && !inPip &&
+                activeCreditsSegment != null && !nextEpisodeHidden &&
+                creditsNext != null && creditsPlayNext != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .zIndex(5f)
+                .navigationBarsPadding()
+                .padding(end = 20.dp, bottom = 96.dp)
         ) {
+            if (creditsNext == null || creditsPlayNext == null) return@AnimatedVisibility
             Button(
-                onClick = { isNavigatingAway = true; creditsPlayNext(creditsNext) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .zIndex(5f)
-                    .navigationBarsPadding()
-                    .padding(end = 20.dp, bottom = 96.dp)
+                onClick = { isNavigatingAway = true; creditsPlayNext(creditsNext) }
             ) {
                 Text("Next episode")
             }
@@ -1686,7 +1725,14 @@ private fun SpeedPickerDialog(current: Float, onSelect: (Float) -> Unit, onDismi
         shape = RoundedCornerShape(12.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         text = {
-            Column(modifier = Modifier.heightIn(max = 360.dp)) {
+            // Scroll so options below 1.0× aren't clipped on shorter screens —
+            // without this the bottom half of the list rendered as empty buttons
+            // that only worked at the top of their range (the >1× speeds).
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 speeds.forEach { speed ->
                     Row(
                         Modifier
