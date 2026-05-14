@@ -44,6 +44,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -52,10 +53,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
@@ -63,6 +66,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C as ExoC
+import androidx.media3.common.Cue
+import androidx.media3.common.CueGroup
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -310,6 +315,7 @@ fun PlayerScreen(
     var lastDragWallMs by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
+    var exoSubtitleCues by remember { mutableStateOf<List<Cue>>(emptyList()) }
     // True once the first video frame has been rendered to the surface. Used to
     // show the Play icon (not Pause) while the player is technically "ready" but
     // no frame is visible yet — prevents the Pause-bars flash before video appears.
@@ -344,6 +350,7 @@ fun PlayerScreen(
         playbackAttempt = 0
         selectedAudioIndex = null
         selectedSubtitleIndex = null
+        exoSubtitleCues = emptyList()
         if (localFilePath != null) {
             details = item
             selectedSubtitleIndex = pickPreferredSubtitle(
@@ -555,6 +562,10 @@ fun PlayerScreen(
                     playWhenFirstFrameRenders = false
                     player.playWhenReady = true
                 }
+            }
+
+            override fun onCues(cueGroup: CueGroup) {
+                exoSubtitleCues = cueGroup.cues
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -1063,6 +1074,11 @@ fun PlayerScreen(
                         pv.useController = false
                         pv.resizeMode = fillMode.toResizeMode()
                         pv.subtitleView?.apply {
+                            visibility = if (exoSubtitleCues.any { it.text != null }) {
+                                android.view.View.GONE
+                            } else {
+                                android.view.View.VISIBLE
+                            }
                             setStyle(
                                 androidx.media3.ui.CaptionStyleCompat(
                                     subtitleAndroidColor(userSettings.subtitleColor),
@@ -1096,6 +1112,53 @@ fun PlayerScreen(
         }
 
         // Transparent overlay — tapping toggles chrome visibility.
+        val subtitleText = exoSubtitleCues
+            .mapNotNull { it.text?.toString()?.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+        if (subtitleText.isNotBlank()) {
+            val subtitleBaseSp = (configuration.screenHeightDp * exoSubtitleFraction)
+                .coerceIn(if (inPip) 14f else 17f, if (inPip) 20f else 36f)
+            val subtitleBottomPadding = if (inPip) {
+                10.dp
+            } else {
+                (configuration.screenHeightDp * userSettings.subtitlePositionFraction).dp
+            }
+            val subtitleSidePadding = if (inPip) 8.dp else 24.dp
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(
+                        start = subtitleSidePadding,
+                        end = subtitleSidePadding,
+                        bottom = subtitleBottomPadding
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = subtitleText,
+                    color = subtitleComposeColor(userSettings.subtitleColor),
+                    fontSize = subtitleBaseSp.sp,
+                    lineHeight = (subtitleBaseSp * 1.25f).sp,
+                    textAlign = TextAlign.Center,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = Shadow(
+                            color = Color.Black,
+                            blurRadius = 4f
+                        )
+                    ),
+                    modifier = if (userSettings.subtitleBackground) {
+                        Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                    } else {
+                        Modifier
+                    }
+                )
+            }
+        }
+
         // When locked, any tap just reveals the lock button in the top bar.
         if (!inPip) {
             Box(

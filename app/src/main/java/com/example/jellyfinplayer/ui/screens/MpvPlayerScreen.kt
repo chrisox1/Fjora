@@ -120,6 +120,8 @@ fun MpvPlayerScreen(
     // returning, or the system briefly reclaiming the surface in PiP).
     var fileLoaded by remember { mutableStateOf(false) }
     var mpvBuffering by remember { mutableStateOf(false) }
+    var mpvManualSeeking by remember { mutableStateOf(false) }
+    var mpvSeekLoadingNonce by remember { mutableIntStateOf(0) }
     // True once MPV has finished its initial load + resume-seek + unpause.
     // Used to hide the play/pause/skip controls during the loading phase
     // (the user only sees the spinner — Findroid-style). Reset on item change.
@@ -156,6 +158,17 @@ fun MpvPlayerScreen(
     val subScope = androidx.compose.runtime.rememberCoroutineScope()
     val latestResolved by rememberUpdatedState(resolved)
     val latestPositionMs by rememberUpdatedState(positionMs)
+
+    fun showMpvSeekLoading() {
+        mpvManualSeeking = true
+        val nonce = ++mpvSeekLoadingNonce
+        subScope.launch {
+            delay(750)
+            if (mpvSeekLoadingNonce == nonce) {
+                mpvManualSeeking = false
+            }
+        }
+    }
 
     // Existence check — if the file vanished between download and play,
     // surface a clean error rather than letting mpv fail silently.
@@ -251,6 +264,7 @@ fun MpvPlayerScreen(
         endedHandled = false
         fileLoaded = false
         mpvFirstFrameReady = false
+        mpvManualSeeking = false
         positionMs = 0L
         durationMs = 0L
         subtitleCues = emptyList()
@@ -532,12 +546,14 @@ fun MpvPlayerScreen(
         }
         pip.activeRewind = {
             runCatching {
+                showMpvSeekLoading()
                 MPVLib.command(arrayOf("seek", "-10", "relative"))
                 resetMpvSubtitleTiming()
             }
         }
         pip.activeForward = {
             runCatching {
+                showMpvSeekLoading()
                 MPVLib.command(arrayOf("seek", "30", "relative"))
                 resetMpvSubtitleTiming()
             }
@@ -862,6 +878,7 @@ fun MpvPlayerScreen(
                 IconButton(
                     onClick = {
                         runCatching {
+                            showMpvSeekLoading()
                             MPVLib.command(arrayOf("seek", "0", "absolute"))
                             resetMpvSubtitleTiming()
                         }
@@ -872,6 +889,7 @@ fun MpvPlayerScreen(
                 IconButton(
                     onClick = {
                         runCatching {
+                            showMpvSeekLoading()
                             MPVLib.command(arrayOf("seek", "-10", "relative"))
                             resetMpvSubtitleTiming()
                         }
@@ -906,6 +924,7 @@ fun MpvPlayerScreen(
                 IconButton(
                     onClick = {
                         runCatching {
+                            showMpvSeekLoading()
                             MPVLib.command(arrayOf("seek", "10", "relative"))
                             resetMpvSubtitleTiming()
                         }
@@ -977,6 +996,7 @@ fun MpvPlayerScreen(
                         if (durationMs > 0) {
                             val targetSec = (dragFraction * durationMs / 1000.0)
                             runCatching {
+                                showMpvSeekLoading()
                                 MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute"))
                                 resetMpvSubtitleTiming()
                                 positionMs = (dragFraction * durationMs).toLong()
@@ -999,7 +1019,8 @@ fun MpvPlayerScreen(
         // Buffering spinner — shown when MPV is paused waiting for the
         // network cache (seeking stall) or when the file is loading
         // (fileLoaded=true but duration not yet reported).
-        val showMpvSpinner = mpvBuffering || (fileLoaded && durationMs == 0L && sourceUrl != null)
+        val showMpvSpinner = mpvBuffering || mpvManualSeeking ||
+            (fileLoaded && durationMs == 0L && sourceUrl != null)
         if (showMpvSpinner) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),
@@ -1096,6 +1117,7 @@ fun MpvPlayerScreen(
             Button(
                 onClick = {
                     runCatching {
+                        showMpvSeekLoading()
                         MPVLib.command(
                             arrayOf("seek", (segment.endMs / 1000.0).toString(), "absolute")
                         )

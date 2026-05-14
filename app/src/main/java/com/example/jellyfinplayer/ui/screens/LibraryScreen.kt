@@ -980,6 +980,7 @@ fun LibraryScreen(
             }
         }
     }
+    }
 
     if (showDeleteAllDownloadsConfirm) {
         AlertDialog(
