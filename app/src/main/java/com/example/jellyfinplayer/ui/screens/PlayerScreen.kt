@@ -66,8 +66,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C as ExoC
-import androidx.media3.common.Cue
-import androidx.media3.common.CueGroup
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
@@ -75,6 +73,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -987,18 +987,22 @@ fun PlayerScreen(
     // restarts the timer.
     var skipIntroHidden by remember(item.id) { mutableStateOf(false) }
     var nextEpisodeHidden by remember(item.id) { mutableStateOf(false) }
-    LaunchedEffect(activeIntroSegment != null, chromeVisible) {
+    LaunchedEffect(activeIntroSegment?.startMs, activeIntroSegment?.endMs) {
         if (activeIntroSegment != null) {
             skipIntroHidden = false
             delay(10_000L)
             skipIntroHidden = true
+        } else {
+            skipIntroHidden = false
         }
     }
-    LaunchedEffect(activeCreditsSegment != null, chromeVisible) {
+    LaunchedEffect(activeCreditsSegment?.startMs, activeCreditsSegment?.endMs) {
         if (activeCreditsSegment != null) {
             nextEpisodeHidden = false
             delay(10_000L)
             nextEpisodeHidden = true
+        } else {
+            nextEpisodeHidden = false
         }
     }
     val exoSubtitleFraction = remember(
@@ -1435,13 +1439,11 @@ fun PlayerScreen(
             modifier = Modifier.matchParentSize().zIndex(6f)
         )
 
-        // Overlays follow the player chrome: visible only when controls are
-        // visible AND the player has actually rendered a frame. Hidden while
-        // loading. Auto-fades after 10 s; tap-to-reveal restarts the timer.
+        // Overlays get one automatic 10 s reveal, then follow the player chrome.
         AnimatedVisibility(
-            visible = chromeVisible && firstFrameRendered &&
+            visible = (chromeVisible || !skipIntroHidden) && firstFrameRendered &&
                 !controlsLocked && !inPip &&
-                activeIntroSegment != null && !skipIntroHidden,
+                activeIntroSegment != null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1462,9 +1464,9 @@ fun PlayerScreen(
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
         AnimatedVisibility(
-            visible = chromeVisible && firstFrameRendered &&
+            visible = (chromeVisible || !nextEpisodeHidden) && firstFrameRendered &&
                 !controlsLocked && !inPip &&
-                activeCreditsSegment != null && !nextEpisodeHidden &&
+                activeCreditsSegment != null &&
                 creditsNext != null && creditsPlayNext != null,
             enter = fadeIn(),
             exit = fadeOut(),

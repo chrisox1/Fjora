@@ -630,18 +630,22 @@ fun MpvPlayerScreen(
     // smoothly fade away. Any tap (chromeVisible flip) restarts the timer.
     var skipIntroHidden by remember(item.id) { mutableStateOf(false) }
     var nextEpisodeHidden by remember(item.id) { mutableStateOf(false) }
-    LaunchedEffect(activeIntroSegment != null, chromeVisible) {
+    LaunchedEffect(activeIntroSegment?.startMs, activeIntroSegment?.endMs) {
         if (activeIntroSegment != null) {
             skipIntroHidden = false
             delay(10_000L)
             skipIntroHidden = true
+        } else {
+            skipIntroHidden = false
         }
     }
-    LaunchedEffect(activeCreditsSegment != null, chromeVisible) {
+    LaunchedEffect(activeCreditsSegment?.startMs, activeCreditsSegment?.endMs) {
         if (activeCreditsSegment != null) {
             nextEpisodeHidden = false
             delay(10_000L)
             nextEpisodeHidden = true
+        } else {
+            nextEpisodeHidden = false
         }
     }
 
@@ -1099,13 +1103,11 @@ fun MpvPlayerScreen(
             }
         }
 
-        // Overlays follow the player chrome: visible only when controls are
-        // visible AND the first frame has rendered. Hidden while MPV is still
-        // loading. Auto-fades after 10 s; tap-to-reveal restarts the timer.
+        // Overlays get one automatic 10 s reveal, then follow the player chrome.
         AnimatedVisibility(
-            visible = chromeVisible && mpvFirstFrameReady &&
+            visible = (chromeVisible || !skipIntroHidden) && mpvFirstFrameReady &&
                 !controlsLocked && !inPip &&
-                activeIntroSegment != null && !skipIntroHidden,
+                activeIntroSegment != null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1133,9 +1135,9 @@ fun MpvPlayerScreen(
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
         AnimatedVisibility(
-            visible = chromeVisible && mpvFirstFrameReady &&
+            visible = (chromeVisible || !nextEpisodeHidden) && mpvFirstFrameReady &&
                 !controlsLocked && !inPip &&
-                activeCreditsSegment != null && !nextEpisodeHidden &&
+                activeCreditsSegment != null &&
                 creditsNext != null && creditsPlayNext != null,
             enter = fadeIn(),
             exit = fadeOut(),
