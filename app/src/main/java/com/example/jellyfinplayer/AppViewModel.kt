@@ -116,7 +116,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             subtitleDelayMs = 0L,
             downloadStorageLimitBytes = null,
             includeEpisodesInSearch = false,
-            imageCacheLimitBytes = null,
+            imageCacheLimitBytes = 50L * 1024 * 1024,
             subtitlePositionFraction = 0.08f
         )
     )
@@ -190,7 +190,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setIncludeEpisodesInSearch(enabled: Boolean) {
-        viewModelScope.launch { settingsStore.setIncludeEpisodesInSearch(enabled) }
+        viewModelScope.launch {
+            settingsStore.setIncludeEpisodesInSearch(enabled)
+            val q = _searchQuery.value
+            if (q.isNotBlank() && repo.isAuthenticated()) {
+                _searching.value = true
+                runCatching { repo.search(q, includeEpisodes = enabled) }
+                    .onSuccess { _searchResults.value = it }
+                    .onFailure { t ->
+                        if (t is AuthExpiredException) handleAuthExpired()
+                        _searchResults.value = emptyList()
+                    }
+                _searching.value = false
+            }
+        }
     }
 
     fun setImageCacheLimitBytes(bytes: Long?) {

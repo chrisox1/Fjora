@@ -31,7 +31,7 @@ class JellyfinApp : Application(), ImageLoaderFactory {
         // ImageLoader is built once).
         val cacheLimitBytes = runCatching {
             runBlocking { SettingsStore(this@JellyfinApp).flow.first().imageCacheLimitBytes }
-        }.getOrNull() ?: (250L * 1024 * 1024)
+        }.getOrNull() ?: (50L * 1024 * 1024)
         return ImageLoader.Builder(this)
             // 200ms crossfade is the sweet spot — fast enough not to feel
             // sluggish on grid scrolls, slow enough to register as a fade

@@ -71,7 +71,7 @@ class SettingsStore(private val context: Context) {
         val downloadStorageLimitBytes: Long?,
         /** When on, global search also returns individual episodes (default off). */
         val includeEpisodesInSearch: Boolean,
-        /** Hard cap on Coil's on-disk image cache. Null = use the default (250 MB). */
+        /** Hard cap on Coil's on-disk image cache. Null = use the default (50 MB). */
         val imageCacheLimitBytes: Long?,
         /** Subtitle vertical position as fraction of view height from bottom (0.03..0.35). */
         val subtitlePositionFraction: Float

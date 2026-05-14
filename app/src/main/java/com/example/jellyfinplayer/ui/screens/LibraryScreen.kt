@@ -62,6 +62,7 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.data.HomeHeroSource
 import com.example.jellyfinplayer.ui.components.DownloadStatus
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
+import kotlinx.coroutines.launch
 
 private enum class LibraryViewMode(val title: String) { HOME(""), MOVIES("Movies"), SHOWS("Shows") }
 
@@ -124,6 +125,7 @@ fun LibraryScreen(
     val libraries = vm.libraries.collectAsState().value
     val selectedLibraryId = vm.selectedLibraryId.collectAsState().value
     val searchQuery = vm.searchQuery.collectAsState().value
+    val searchResults = vm.searchResults.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
     val downloads = vm.downloads.collectAsState().value
     var viewMode by remember { mutableStateOf(LibraryNavigationSnapshot.viewMode) }
@@ -158,6 +160,7 @@ fun LibraryScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
     val searchFocusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { if (items.isEmpty()) vm.loadHome() }
 
@@ -189,6 +192,13 @@ fun LibraryScreen(
         }
     }
 
+    fun returnToHomeMode() {
+        LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
+        LibraryNavigationSnapshot.firstVisibleItemIndex = homeReturnIndex
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = homeReturnOffset
+        viewMode = LibraryViewMode.HOME
+    }
+
     BackHandler(enabled = isSearchMode) {
         vm.clearSearch()
         searchOpen = false
@@ -202,7 +212,7 @@ fun LibraryScreen(
     }
 
     BackHandler(enabled = !isSearchMode && !fullListSearchOpen && viewMode != LibraryViewMode.HOME) {
-        viewMode = LibraryViewMode.HOME
+        returnToHomeMode()
     }
 
     LaunchedEffect(selectedLibraryId) {
@@ -248,18 +258,30 @@ fun LibraryScreen(
             }
         }
     }
-    val visibleSearchResults = remember(items, searchQuery) {
+    val visibleSearchResults = remember(
+        items,
+        searchResults,
+        searchQuery,
+        settings.includeEpisodesInSearch
+    ) {
         val query = searchQuery.trim()
         if (query.isBlank()) {
             emptyList()
         } else {
-            items.filter { item ->
+            val localMatches = items.filter { item ->
                 (item.type == "Movie" || item.type == "Series") &&
                     (
                         item.name.contains(query, ignoreCase = true) ||
                             item.productionYear?.toString()?.contains(query) == true ||
                             item.communityRating?.let { "%.1f".format(it) }?.contains(query) == true
                     )
+            }
+            if (!settings.includeEpisodesInSearch) {
+                localMatches
+            } else {
+                (localMatches + searchResults.filter { result ->
+                    result.type == "Movie" || result.type == "Series" || result.type == "Episode"
+                }).distinctBy { it.id }
             }
         }
     }
@@ -512,7 +534,7 @@ fun LibraryScreen(
                             Icon(Icons.Default.Search, contentDescription = "Search")
                         }
                     } else {
-                        IconButton(onClick = { viewMode = LibraryViewMode.HOME }) {
+                        IconButton(onClick = { returnToHomeMode() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back"
@@ -538,7 +560,10 @@ fun LibraryScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                             }
                         }
-                        IconButton(onClick = onSettingsClick) {
+                        IconButton(onClick = {
+                            saveLibraryPosition()
+                            onSettingsClick()
+                        }) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     } else {
@@ -889,8 +914,18 @@ fun LibraryScreen(
         SortDialog(
             selectedKey = sortKey,
             ascending = sortAscending,
-            onSelectKey = { sortKey = it },
-            onAscendingChange = { sortAscending = it },
+            onSelectKey = {
+                sortKey = it
+                LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+                LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+                scope.launch { gridState.scrollToItem(0) }
+            },
+            onAscendingChange = {
+                sortAscending = it
+                LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+                LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+                scope.launch { gridState.scrollToItem(0) }
+            },
             onDismiss = { showSortDialog = false }
         )
     }

@@ -1004,20 +1004,21 @@ private fun downloadLimitLabel(bytes: Long?): String =
     downloadLimitOptions.firstOrNull { it.first == bytes }?.second ?: "Custom"
 
 /**
- * Image-cache size options. `null` resolves to the in-code default (250 MB)
+ * Image-cache size options. `null` resolves to the in-code default (50 MB)
  * applied in JellyfinApp; the higher tiers let users with lots of artwork
  * keep more in cache to avoid re-downloads when scrolling.
  */
 private val imageCacheLimitOptions = listOf(
+    50L * 1024 * 1024 to "50 MB (default)",
     100L * 1024 * 1024 to "100 MB",
-    250L * 1024 * 1024 to "250 MB (default)",
+    250L * 1024 * 1024 to "250 MB",
     500L * 1024 * 1024 to "500 MB",
     1L * 1024 * 1024 * 1024 to "1 GB",
     2L * 1024 * 1024 * 1024 to "2 GB"
 )
 
 private fun imageCacheLimitLabel(bytes: Long?): String {
-    if (bytes == null) return "250 MB (default)"
+    if (bytes == null) return "50 MB (default)"
     return imageCacheLimitOptions.firstOrNull { it.first == bytes }?.second ?: "Custom"
 }
 
@@ -1065,10 +1066,10 @@ private fun ImageCacheLimitDialog(
         text = {
             Column {
                 imageCacheLimitOptions.forEach { (value, label) ->
-                    // null = default. The "250 MB (default)" entry matches null.
-                    val effectiveCurrent = current ?: 250L * 1024 * 1024
+                    // null = default. The "50 MB (default)" entry matches null.
+                    val effectiveCurrent = current ?: 50L * 1024 * 1024
                     val selected = value == effectiveCurrent
-                    val emit: Long? = if (value == 250L * 1024 * 1024) null else value
+                    val emit: Long? = if (value == 50L * 1024 * 1024) null else value
                     Row(
                         Modifier
                             .fillMaxWidth()
