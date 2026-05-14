@@ -62,7 +62,6 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.data.HomeHeroSource
 import com.example.jellyfinplayer.ui.components.DownloadStatus
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
-import kotlinx.coroutines.launch
 
 private enum class LibraryViewMode(val title: String) { HOME(""), MOVIES("Movies"), SHOWS("Shows") }
 
@@ -157,10 +156,17 @@ fun LibraryScreen(
     var refreshRequested by remember { mutableStateOf(false) }
     var wasRefreshing by remember { mutableStateOf(false) }
     var showDeleteAllDownloadsConfirm by remember { mutableStateOf(false) }
+    var observedSelectedLibraryId by remember { mutableStateOf(selectedLibraryId) }
+    var pendingSortScrollToTop by remember { mutableStateOf(false) }
+    var searchReturnIndex by remember { mutableIntStateOf(0) }
+    var searchReturnOffset by remember { mutableIntStateOf(0) }
+    var pendingSearchRestore by remember { mutableStateOf(false) }
+    var fullListSearchReturnIndex by remember { mutableIntStateOf(0) }
+    var fullListSearchReturnOffset by remember { mutableIntStateOf(0) }
+    var pendingFullListSearchRestore by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
     val searchFocusRequester = remember { FocusRequester() }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { if (items.isEmpty()) vm.loadHome() }
 
@@ -202,12 +208,14 @@ fun LibraryScreen(
     BackHandler(enabled = isSearchMode) {
         vm.clearSearch()
         searchOpen = false
+        pendingSearchRestore = true
         keyboard?.hide()
     }
 
     BackHandler(enabled = !isSearchMode && fullListSearchOpen) {
         fullListSearchOpen = false
         fullListSearchQuery = ""
+        pendingFullListSearchRestore = true
         keyboard?.hide()
     }
 
@@ -216,16 +224,19 @@ fun LibraryScreen(
     }
 
     LaunchedEffect(selectedLibraryId) {
-        viewMode = LibraryViewMode.HOME
-        showSortDialog = false
-        fullListSearchOpen = false
-        fullListSearchQuery = ""
-        homeReturnIndex = 0
-        homeReturnOffset = 0
-        LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
-        LibraryNavigationSnapshot.firstVisibleItemIndex = 0
-        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
-        LatestRowsScrollSnapshot.reset()
+        if (observedSelectedLibraryId != selectedLibraryId) {
+            viewMode = LibraryViewMode.HOME
+            showSortDialog = false
+            fullListSearchOpen = false
+            fullListSearchQuery = ""
+            homeReturnIndex = 0
+            homeReturnOffset = 0
+            LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
+            LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+            LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+            LatestRowsScrollSnapshot.reset()
+            observedSelectedLibraryId = selectedLibraryId
+        }
     }
 
     val latestMovies = remember(items) {
@@ -317,7 +328,7 @@ fun LibraryScreen(
             // Instant scroll so coming back to the home grid lands exactly
             // where the user left off — animated scroll here read as a
             // "swipe down" jolt.
-            gridState.scrollToItem(homeReturnIndex, homeReturnOffset)
+            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
         } else {
             gridState.scrollToItem(0)
         }
@@ -327,11 +338,24 @@ fun LibraryScreen(
     // somewhere in the middle of the re-sorted list (their previous index
     // points at a different item under the new sort order) which feels
     // broken. Only fires in the full-list views — HOME doesn't sort.
-    LaunchedEffect(sortKey, sortAscending) {
-        if (viewMode != LibraryViewMode.HOME) {
+    LaunchedEffect(visibleFullListItems, pendingSortScrollToTop) {
+        if (pendingSortScrollToTop && viewMode != LibraryViewMode.HOME) {
             gridState.scrollToItem(0)
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+            pendingSortScrollToTop = false
+        }
+    }
+    LaunchedEffect(pendingSearchRestore) {
+        if (pendingSearchRestore) {
+            gridState.scrollToItem(searchReturnIndex, searchReturnOffset)
+            pendingSearchRestore = false
+        }
+    }
+    LaunchedEffect(pendingFullListSearchRestore) {
+        if (pendingFullListSearchRestore) {
+            gridState.scrollToItem(fullListSearchReturnIndex, fullListSearchReturnOffset)
+            pendingFullListSearchRestore = false
         }
     }
     fun saveLibraryPosition() {
@@ -529,6 +553,8 @@ fun LibraryScreen(
                 navigationIcon = {
                     if (viewMode == LibraryViewMode.HOME) {
                         IconButton(onClick = {
+                            searchReturnIndex = gridState.firstVisibleItemIndex
+                            searchReturnOffset = gridState.firstVisibleItemScrollOffset
                             searchOpen = true
                         }) {
                             Icon(Icons.Default.Search, contentDescription = "Search")
@@ -567,7 +593,11 @@ fun LibraryScreen(
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
                     } else {
-                        IconButton(onClick = { fullListSearchOpen = true }) {
+                        IconButton(onClick = {
+                            fullListSearchReturnIndex = gridState.firstVisibleItemIndex
+                            fullListSearchReturnOffset = gridState.firstVisibleItemScrollOffset
+                            fullListSearchOpen = true
+                        }) {
                             Icon(Icons.Default.Search, contentDescription = "Search ${viewMode.title}")
                         }
                         IconButton(onClick = { showSortDialog = true }) {
@@ -597,6 +627,7 @@ fun LibraryScreen(
                         onClear = {
                             vm.clearSearch()
                             searchOpen = false
+                            pendingSearchRestore = true
                             keyboard?.hide()
                         },
                         onSubmit = { keyboard?.hide() },
@@ -616,6 +647,7 @@ fun LibraryScreen(
                         onClear = {
                             fullListSearchOpen = false
                             fullListSearchQuery = ""
+                            pendingFullListSearchRestore = true
                             keyboard?.hide()
                         },
                         onSubmit = { keyboard?.hide() },
@@ -915,16 +947,20 @@ fun LibraryScreen(
             selectedKey = sortKey,
             ascending = sortAscending,
             onSelectKey = {
-                sortKey = it
-                LibraryNavigationSnapshot.firstVisibleItemIndex = 0
-                LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
-                scope.launch { gridState.scrollToItem(0) }
+                if (sortKey != it) {
+                    LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+                    LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+                    pendingSortScrollToTop = true
+                    sortKey = it
+                }
             },
             onAscendingChange = {
-                sortAscending = it
-                LibraryNavigationSnapshot.firstVisibleItemIndex = 0
-                LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
-                scope.launch { gridState.scrollToItem(0) }
+                if (sortAscending != it) {
+                    LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+                    LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+                    pendingSortScrollToTop = true
+                    sortAscending = it
+                }
             },
             onDismiss = { showSortDialog = false }
         )
@@ -1029,14 +1065,7 @@ private fun SortDialog(
                         shape = RoundedCornerShape(50)
                     )
                 }
-                // Render the currently-selected sort key at the top of the
-                // list, then the rest in their natural enum order. Keeps the
-                // user's current choice anchored to the top of the dialog
-                // instead of drifting into the middle of the option list.
-                val orderedKeys = remember(selectedKey) {
-                    listOf(selectedKey) + MediaSortKey.values().filter { it != selectedKey }
-                }
-                orderedKeys.forEach { key ->
+                MediaSortKey.values().forEach { key ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
