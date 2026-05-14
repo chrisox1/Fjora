@@ -1,11 +1,17 @@
 package com.example.jellyfinplayer.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
@@ -69,6 +75,8 @@ private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
     var firstVisibleItemIndex: Int = 0
     var firstVisibleItemScrollOffset: Int = 0
+    var homeReturnIndex: Int = 0
+    var homeReturnOffset: Int = 0
 }
 
 /**
@@ -104,7 +112,11 @@ private enum class MediaSortKey(val label: String) {
     RELEASE_DATE("Release Date")
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalFoundationApi::class,
+    ExperimentalAnimationApi::class
+)
 @Composable
 fun LibraryScreen(
     vm: AppViewModel,
@@ -134,22 +146,10 @@ fun LibraryScreen(
     var fullListSearchOpen by remember { mutableStateOf(false) }
     var fullListSearchQuery by remember { mutableStateOf("") }
     var homeReturnIndex by remember {
-        mutableIntStateOf(
-            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
-                LibraryNavigationSnapshot.firstVisibleItemIndex
-            } else {
-                0
-            }
-        )
+        mutableIntStateOf(LibraryNavigationSnapshot.homeReturnIndex)
     }
     var homeReturnOffset by remember {
-        mutableIntStateOf(
-            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
-                LibraryNavigationSnapshot.firstVisibleItemScrollOffset
-            } else {
-                0
-            }
-        )
+        mutableIntStateOf(LibraryNavigationSnapshot.homeReturnOffset)
     }
     var searchOpen by remember { mutableStateOf(false) }
     var showServerInfoDialog by remember { mutableStateOf(false) }
@@ -202,6 +202,8 @@ fun LibraryScreen(
         LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
         LibraryNavigationSnapshot.firstVisibleItemIndex = homeReturnIndex
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = homeReturnOffset
+        LibraryNavigationSnapshot.homeReturnIndex = homeReturnIndex
+        LibraryNavigationSnapshot.homeReturnOffset = homeReturnOffset
         viewMode = LibraryViewMode.HOME
     }
 
@@ -234,6 +236,8 @@ fun LibraryScreen(
             LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+            LibraryNavigationSnapshot.homeReturnIndex = 0
+            LibraryNavigationSnapshot.homeReturnOffset = 0
             LatestRowsScrollSnapshot.reset()
             observedSelectedLibraryId = selectedLibraryId
         }
@@ -328,7 +332,7 @@ fun LibraryScreen(
             // Instant scroll so coming back to the home grid lands exactly
             // where the user left off — animated scroll here read as a
             // "swipe down" jolt.
-            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
+            gridState.scrollToItem(homeReturnIndex, homeReturnOffset)
         } else {
             gridState.scrollToItem(0)
         }
@@ -340,21 +344,29 @@ fun LibraryScreen(
     // broken. Only fires in the full-list views — HOME doesn't sort.
     LaunchedEffect(visibleFullListItems, pendingSortScrollToTop) {
         if (pendingSortScrollToTop && viewMode != LibraryViewMode.HOME) {
-            gridState.scrollToItem(0)
+            withFrameNanos { }
+            withFrameNanos { }
+            gridState.scrollToItem(0, 0)
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
             pendingSortScrollToTop = false
         }
     }
-    LaunchedEffect(pendingSearchRestore) {
-        if (pendingSearchRestore) {
+    LaunchedEffect(isSearchMode, pendingSearchRestore) {
+        if (pendingSearchRestore && !isSearchMode) {
+            withFrameNanos { }
             gridState.scrollToItem(searchReturnIndex, searchReturnOffset)
+            LibraryNavigationSnapshot.firstVisibleItemIndex = searchReturnIndex
+            LibraryNavigationSnapshot.firstVisibleItemScrollOffset = searchReturnOffset
             pendingSearchRestore = false
         }
     }
-    LaunchedEffect(pendingFullListSearchRestore) {
-        if (pendingFullListSearchRestore) {
+    LaunchedEffect(fullListSearchOpen, pendingFullListSearchRestore) {
+        if (pendingFullListSearchRestore && !fullListSearchOpen) {
+            withFrameNanos { }
             gridState.scrollToItem(fullListSearchReturnIndex, fullListSearchReturnOffset)
+            LibraryNavigationSnapshot.firstVisibleItemIndex = fullListSearchReturnIndex
+            LibraryNavigationSnapshot.firstVisibleItemScrollOffset = fullListSearchReturnOffset
             pendingFullListSearchRestore = false
         }
     }
@@ -423,6 +435,8 @@ fun LibraryScreen(
     val openFullList: (LibraryViewMode) -> Unit = { mode ->
         homeReturnIndex = gridState.firstVisibleItemIndex
         homeReturnOffset = gridState.firstVisibleItemScrollOffset
+        LibraryNavigationSnapshot.homeReturnIndex = homeReturnIndex
+        LibraryNavigationSnapshot.homeReturnOffset = homeReturnOffset
         LibraryNavigationSnapshot.viewMode = mode
         LibraryNavigationSnapshot.firstVisibleItemIndex = 0
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
@@ -672,14 +686,65 @@ fun LibraryScreen(
             }
 
             Box(Modifier.fillMaxSize()) {
-                when {
-                    state is UiState.Loading && items.isEmpty() -> {
-                        CircularProgressIndicator(Modifier.align(Alignment.Center))
+                AnimatedContent(
+                    targetState = viewMode,
+                    transitionSpec = {
+                        val openingFullList = initialState == LibraryViewMode.HOME &&
+                            targetState != LibraryViewMode.HOME
+                        val distance = if (openingFullList) 48 else -48
+                        (
+                            slideInHorizontally(animationSpec = tween(180)) { distance } +
+                                fadeIn(animationSpec = tween(140))
+                            ) togetherWith (
+                            slideOutHorizontally(animationSpec = tween(180)) { -distance / 2 } +
+                                fadeOut(animationSpec = tween(120))
+                            )
+                    },
+                    label = "library_view_mode",
+                    modifier = Modifier.fillMaxSize()
+                ) { animatedViewMode ->
+                    val animatedFullListItems = remember(items, animatedViewMode, sortKey, sortAscending) {
+                        val base = when (animatedViewMode) {
+                            LibraryViewMode.MOVIES -> items.filter { it.type == "Movie" }
+                            LibraryViewMode.SHOWS -> items.filter { it.type == "Series" }
+                            LibraryViewMode.HOME -> emptyList()
+                        }
+                        sortMediaItems(base, sortKey, sortAscending)
                     }
-                    state is UiState.Error && items.isEmpty() -> {
-                        ErrorBlock(state.message, Modifier.align(Alignment.Center)) { vm.loadHome() }
+                    val animatedVisibleFullListItems = remember(
+                        animatedFullListItems,
+                        fullListSearchQuery
+                    ) {
+                        val query = fullListSearchQuery.trim()
+                        if (query.isBlank()) {
+                            animatedFullListItems
+                        } else {
+                            animatedFullListItems.filter { item ->
+                                item.name.contains(query, ignoreCase = true) ||
+                                    item.productionYear?.toString()?.contains(query) == true ||
+                                    item.communityRating?.let { "%.1f".format(it) }?.contains(query) == true
+                            }
+                        }
                     }
-                    else -> {
+
+                    when {
+                        state is UiState.Loading && items.isEmpty() -> {
+                            Box(
+                                Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        state is UiState.Error && items.isEmpty() -> {
+                            Box(
+                                Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ErrorBlock(state.message) { vm.loadHome() }
+                            }
+                        }
+                        else -> {
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Adaptive(minSize = 138.dp),
@@ -785,13 +850,13 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
-                            } else if (viewMode != LibraryViewMode.HOME) {
-                                if (visibleFullListItems.isEmpty()) {
+                            } else if (animatedViewMode != LibraryViewMode.HOME) {
+                                if (animatedVisibleFullListItems.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         if (fullListSearchQuery.isBlank()) {
                                             EmptyBlock(
                                                 "Nothing here yet",
-                                                "Add ${viewMode.title.lowercase()} on your Jellyfin server, then refresh."
+                                                "Add ${animatedViewMode.title.lowercase()} on your Jellyfin server, then refresh."
                                             )
                                         } else {
                                             EmptyBlock(
@@ -801,7 +866,7 @@ fun LibraryScreen(
                                         }
                                     }
                                 } else {
-                                    items(visibleFullListItems, key = { it.id }) { item ->
+                                    items(animatedVisibleFullListItems, key = { it.id }) { item ->
                                         LibraryCard(
                                             item,
                                             vm,
