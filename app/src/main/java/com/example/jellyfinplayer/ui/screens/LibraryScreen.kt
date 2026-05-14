@@ -318,10 +318,23 @@ fun LibraryScreen(
             hasNextUpItems = nextUp.isNotEmpty()
         )
     }
-    val gridState = rememberLazyGridState(
-        initialFirstVisibleItemIndex = LibraryNavigationSnapshot.firstVisibleItemIndex,
-        initialFirstVisibleItemScrollOffset = LibraryNavigationSnapshot.firstVisibleItemScrollOffset
+    val homeGridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = LibraryNavigationSnapshot.homeReturnIndex,
+        initialFirstVisibleItemScrollOffset = LibraryNavigationSnapshot.homeReturnOffset
     )
+    val fullListGridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = if (LibraryNavigationSnapshot.viewMode != LibraryViewMode.HOME) {
+            LibraryNavigationSnapshot.firstVisibleItemIndex
+        } else {
+            0
+        },
+        initialFirstVisibleItemScrollOffset = if (LibraryNavigationSnapshot.viewMode != LibraryViewMode.HOME) {
+            LibraryNavigationSnapshot.firstVisibleItemScrollOffset
+        } else {
+            0
+        }
+    )
+    val activeGridState = if (viewMode == LibraryViewMode.HOME) homeGridState else fullListGridState
     var skipInitialViewModeScroll by remember { mutableStateOf(true) }
     LaunchedEffect(viewMode) {
         if (skipInitialViewModeScroll) {
@@ -332,9 +345,9 @@ fun LibraryScreen(
             // Instant scroll so coming back to the home grid lands exactly
             // where the user left off — animated scroll here read as a
             // "swipe down" jolt.
-            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
+            homeGridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
         } else {
-            gridState.scrollToItem(0)
+            fullListGridState.scrollToItem(0)
         }
     }
 
@@ -346,7 +359,7 @@ fun LibraryScreen(
         if (pendingSortScrollToTop && viewMode != LibraryViewMode.HOME) {
             withFrameNanos { }
             withFrameNanos { }
-            gridState.scrollToItem(0, 0)
+            fullListGridState.scrollToItem(0, 0)
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
             pendingSortScrollToTop = false
@@ -355,7 +368,7 @@ fun LibraryScreen(
     LaunchedEffect(isSearchMode, pendingSearchRestore) {
         if (pendingSearchRestore && !isSearchMode) {
             withFrameNanos { }
-            gridState.scrollToItem(searchReturnIndex, searchReturnOffset)
+            activeGridState.scrollToItem(searchReturnIndex, searchReturnOffset)
             LibraryNavigationSnapshot.firstVisibleItemIndex = searchReturnIndex
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = searchReturnOffset
             pendingSearchRestore = false
@@ -364,7 +377,7 @@ fun LibraryScreen(
     LaunchedEffect(fullListSearchOpen, pendingFullListSearchRestore) {
         if (pendingFullListSearchRestore && !fullListSearchOpen) {
             withFrameNanos { }
-            gridState.scrollToItem(fullListSearchReturnIndex, fullListSearchReturnOffset)
+            fullListGridState.scrollToItem(fullListSearchReturnIndex, fullListSearchReturnOffset)
             LibraryNavigationSnapshot.firstVisibleItemIndex = fullListSearchReturnIndex
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = fullListSearchReturnOffset
             pendingFullListSearchRestore = false
@@ -372,8 +385,12 @@ fun LibraryScreen(
     }
     fun saveLibraryPosition() {
         LibraryNavigationSnapshot.viewMode = viewMode
-        LibraryNavigationSnapshot.firstVisibleItemIndex = gridState.firstVisibleItemIndex
-        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
+        LibraryNavigationSnapshot.firstVisibleItemIndex = activeGridState.firstVisibleItemIndex
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = activeGridState.firstVisibleItemScrollOffset
+        if (viewMode == LibraryViewMode.HOME) {
+            LibraryNavigationSnapshot.homeReturnIndex = homeGridState.firstVisibleItemIndex
+            LibraryNavigationSnapshot.homeReturnOffset = homeGridState.firstVisibleItemScrollOffset
+        }
     }
 
     // Persistent horizontal scroll states for the four home-screen rows.
@@ -433,8 +450,8 @@ fun LibraryScreen(
         }.collect { LatestRowsScrollSnapshot.latestShows = it }
     }
     val openFullList: (LibraryViewMode) -> Unit = { mode ->
-        homeReturnIndex = gridState.firstVisibleItemIndex
-        homeReturnOffset = gridState.firstVisibleItemScrollOffset
+        homeReturnIndex = homeGridState.firstVisibleItemIndex
+        homeReturnOffset = homeGridState.firstVisibleItemScrollOffset
         LibraryNavigationSnapshot.homeReturnIndex = homeReturnIndex
         LibraryNavigationSnapshot.homeReturnOffset = homeReturnOffset
         LibraryNavigationSnapshot.viewMode = mode
@@ -447,8 +464,8 @@ fun LibraryScreen(
     }
     val libraryTabsAtTop by remember {
         derivedStateOf {
-            gridState.firstVisibleItemIndex == 0 &&
-                gridState.firstVisibleItemScrollOffset < 12
+            homeGridState.firstVisibleItemIndex == 0 &&
+                homeGridState.firstVisibleItemScrollOffset < 12
         }
     }
     val showLibraryTabs = !isSearchMode &&
@@ -567,8 +584,8 @@ fun LibraryScreen(
                 navigationIcon = {
                     if (viewMode == LibraryViewMode.HOME) {
                         IconButton(onClick = {
-                            searchReturnIndex = gridState.firstVisibleItemIndex
-                            searchReturnOffset = gridState.firstVisibleItemScrollOffset
+                            searchReturnIndex = activeGridState.firstVisibleItemIndex
+                            searchReturnOffset = activeGridState.firstVisibleItemScrollOffset
                             searchOpen = true
                         }) {
                             Icon(Icons.Default.Search, contentDescription = "Search")
@@ -608,8 +625,8 @@ fun LibraryScreen(
                         }
                     } else {
                         IconButton(onClick = {
-                            fullListSearchReturnIndex = gridState.firstVisibleItemIndex
-                            fullListSearchReturnOffset = gridState.firstVisibleItemScrollOffset
+                            fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
+                            fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
                             fullListSearchOpen = true
                         }) {
                             Icon(Icons.Default.Search, contentDescription = "Search ${viewMode.title}")
@@ -746,7 +763,11 @@ fun LibraryScreen(
                         }
                         else -> {
                         LazyVerticalGrid(
-                            state = gridState,
+                            state = if (animatedViewMode == LibraryViewMode.HOME) {
+                                homeGridState
+                            } else {
+                                fullListGridState
+                            },
                             columns = GridCells.Adaptive(minSize = 138.dp),
                             contentPadding = PaddingValues(
                                 start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp
@@ -1357,7 +1378,7 @@ private fun FeaturedBanner(
                     },
                     fontWeight = FontWeight.Bold
                 )
-            )
+            }
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
