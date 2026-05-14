@@ -69,6 +69,61 @@ To revert any individual change: `git diff <file>` shows what changed; `git chec
     - **Skip-intro auto-hide**: same `AnimatedVisibility` + 10-second timer pattern as MPV.
     - **Next-episode auto-hide**: same pattern with credits segment.
 
+## Round 4 — Reliability, sort, overlays, subtitles, back-nav
+
+17. **app/src/main/java/com/example/jellyfinplayer/ui/screens/PlayerScreen.kt**
+    - **Skip-intro / Next-episode overlays now follow the player chrome.**
+      The `AnimatedVisibility(visible = ...)` predicate now requires
+      `chromeVisible && firstFrameRendered`. Result: overlays don't show
+      while the stream is still loading, they appear together with the
+      seek bar when the user taps, and they disappear together with the
+      seek bar when chrome auto-hides. The existing 10-second internal
+      timer still fires on top of that.
+    - **ExoPlayer subtitle position** — the `update` block of the
+      `AndroidView` now calls `setApplyEmbeddedStyles(false)`,
+      `setApplyEmbeddedFontSizes(false)`, `setBottomPaddingFraction(...)`
+      and `invalidate()` in order, so Jellyfin's VTT cues can't pin
+      themselves to a fixed line and the View redraws immediately when
+      the slider value changes.
+    - **Player resets state cleanly before every new media item.**
+      Added `runCatching { player.stop() }` before both `setMediaItem`
+      calls (local-file and server-stream paths). After hours-long
+      sessions ExoPlayer can hold onto previous-item internal state that
+      makes the next `prepare()` stall — `stop()` forces an internal
+      reset.
+
+18. **app/src/main/java/com/example/jellyfinplayer/ui/screens/MpvPlayerScreen.kt**
+    - **Skip-intro / Next-episode overlays now follow the player chrome.**
+      Same pattern as ExoPlayer — gated on `chromeVisible && mpvFirstFrameReady`.
+
+19. **app/src/main/java/com/example/jellyfinplayer/ui/screens/LibraryScreen.kt**
+    - **Sort change resets grid to top.** Added
+      `LaunchedEffect(sortKey, sortAscending)` that scrolls the grid to
+      item 0 whenever the user picks a new sort key or flips
+      ascending/descending, and zeros out the `LibraryNavigationSnapshot`
+      so back-from-detail doesn't restore the now-stale position.
+
+20. **app/src/main/java/com/example/jellyfinplayer/ui/screens/EpisodesScreen.kt**
+    - **Module-level `EpisodesCache` added.** Holds the last loaded
+      episode list + enriched series details for one series at a time.
+      On mount, if the cached `seriesId` matches the current series, the
+      screen renders the cached list immediately and the network refresh
+      runs in the background — same "Latest Movies → back" feel as the
+      LibraryScreen. `selectedSeason` is precomputed from the cache so
+      the season tab strip is correct on first frame.
+
+### Known limitations
+- **ExoPlayer subtitle position with embedded `line:` cue attributes.**
+  Some VTT files pin their cues to a fixed line — we now disable
+  `applyEmbeddedStyles` and force a redraw, which works for the vast
+  majority of Jellyfin VTT output, but a cue authored with explicit
+  `line:` positioning can still override the user setting. A full fix
+  would require intercepting the `Cue` stream and rewriting positions.
+- **Long-session "stuck loading" root cause.** No single deterministic
+  bug identified in the code; the `player.stop()` reset is a defensive
+  measure that addresses one common class of stuck-prepare state.
+  Further investigation needs logcat from a reproducible failure.
+
 ## Permissions audit (for Google Play testing phase)
 
 Read `app/src/main/AndroidManifest.xml`. Declared permissions are:

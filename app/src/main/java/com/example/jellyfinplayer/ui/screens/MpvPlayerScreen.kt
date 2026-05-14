@@ -1070,8 +1070,12 @@ fun MpvPlayerScreen(
             }
         }
 
+        // Overlays follow the player chrome: visible only when controls are
+        // visible AND the first frame has rendered. Hidden while MPV is still
+        // loading. Auto-fades after 10 s; tap-to-reveal restarts the timer.
         AnimatedVisibility(
-            visible = !controlsLocked && !inPip &&
+            visible = chromeVisible && mpvFirstFrameReady &&
+                !controlsLocked && !inPip &&
                 activeIntroSegment != null && !skipIntroHidden,
             enter = fadeIn(),
             exit = fadeOut(),
@@ -1099,7 +1103,8 @@ fun MpvPlayerScreen(
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
         AnimatedVisibility(
-            visible = !controlsLocked && !inPip &&
+            visible = chromeVisible && mpvFirstFrameReady &&
+                !controlsLocked && !inPip &&
                 activeCreditsSegment != null && !nextEpisodeHidden &&
                 creditsNext != null && creditsPlayNext != null,
             enter = fadeIn(),

@@ -300,6 +300,18 @@ fun LibraryScreen(
             gridState.scrollToItem(0)
         }
     }
+
+    // Sort change resets the grid to the top. Without this the user lands
+    // somewhere in the middle of the re-sorted list (their previous index
+    // points at a different item under the new sort order) which feels
+    // broken. Only fires in the full-list views — HOME doesn't sort.
+    LaunchedEffect(sortKey, sortAscending) {
+        if (viewMode != LibraryViewMode.HOME) {
+            gridState.scrollToItem(0)
+            LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+            LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+        }
+    }
     fun saveLibraryPosition() {
         LibraryNavigationSnapshot.viewMode = viewMode
         LibraryNavigationSnapshot.firstVisibleItemIndex = gridState.firstVisibleItemIndex

@@ -830,6 +830,12 @@ fun PlayerScreen(
             }
         }
         val seekTo = player.currentPosition.takeIf { it > 0L } ?: 0L
+        // Reset player state before loading new media. After long sessions
+        // (many episode transitions or paused/buffered playback) ExoPlayer
+        // can carry over internal state that makes the next setMediaItem
+        // stall during preparation. stop() forces an internal reset so
+        // every new media starts from a known-clean state.
+        runCatching { player.stop() }
         player.setMediaItem(builder.build(), seekTo)
         firstFrameRendered = false
         playWhenFirstFrameRenders = true
@@ -902,6 +908,9 @@ fun PlayerScreen(
             currentPositionBeforeReload ?: lastGoodPositionMs.value
         }
 
+        // See note above about player.stop() — same defensive reset for the
+        // server-stream path so the player starts each item from a clean slate.
+        runCatching { player.stop() }
         player.setMediaItem(builder.build(), seekTo)
         firstFrameRendered = false
         playWhenFirstFrameRenders = true
@@ -1071,7 +1080,14 @@ fun PlayerScreen(
                             )
                             // Real-time update — re-invoked whenever
                             // userSettings.subtitlePositionFraction changes.
+                            // Disable embedded styles so the cue's own line/
+                            // position attributes (which Jellyfin's VTT track
+                            // sometimes carries) can't override our setting,
+                            // then explicitly invalidate to force a redraw.
+                            setApplyEmbeddedStyles(false)
+                            setApplyEmbeddedFontSizes(false)
                             setBottomPaddingFraction(userSettings.subtitlePositionFraction)
+                            invalidate()
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -1356,8 +1372,12 @@ fun PlayerScreen(
             modifier = Modifier.matchParentSize().zIndex(6f)
         )
 
+        // Overlays follow the player chrome: visible only when controls are
+        // visible AND the player has actually rendered a frame. Hidden while
+        // loading. Auto-fades after 10 s; tap-to-reveal restarts the timer.
         AnimatedVisibility(
-            visible = !controlsLocked && !inPip &&
+            visible = chromeVisible && firstFrameRendered &&
+                !controlsLocked && !inPip &&
                 activeIntroSegment != null && !skipIntroHidden,
             enter = fadeIn(),
             exit = fadeOut(),
@@ -1379,7 +1399,8 @@ fun PlayerScreen(
         val creditsNext = nextEpisode
         val creditsPlayNext = onPlayNext
         AnimatedVisibility(
-            visible = !controlsLocked && !inPip &&
+            visible = chromeVisible && firstFrameRendered &&
+                !controlsLocked && !inPip &&
                 activeCreditsSegment != null && !nextEpisodeHidden &&
                 creditsNext != null && creditsPlayNext != null,
             enter = fadeIn(),

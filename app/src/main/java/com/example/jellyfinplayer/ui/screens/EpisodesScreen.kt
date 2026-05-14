@@ -36,6 +36,20 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.ui.components.CastRow
 
+/**
+ * Cache of the last loaded episode list per series, plus the matching
+ * enriched series details. Module-level so it survives EpisodesScreen being
+ * unmounted while the user is on the player. On return from the player the
+ * screen reads from the cache and renders instantly — same "Latest Movies →
+ * back" feel as the LibraryScreen. A silent refresh runs in the background
+ * to pick up any progress / watched-state updates.
+ */
+private object EpisodesCache {
+    var seriesId: String? = null
+    var episodes: List<MediaItem> = emptyList()
+    var details: MediaItem? = null
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EpisodesScreen(
@@ -47,18 +61,39 @@ fun EpisodesScreen(
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit = {}
 ) {
-    var episodes by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    // Seed from cache if available so the list renders instantly. The
+    // LaunchedEffect below still refreshes in the background.
+    val cached = if (EpisodesCache.seriesId == series.id) EpisodesCache else null
+    var episodes by remember { mutableStateOf(cached?.episodes ?: emptyList()) }
     // Series detail with full cast/crew data — initialized with the slim
     // `series` object so the hero renders immediately, then enriched
     // silently when loadItemDetails returns. Render-with-stale-data
     // pattern; the screen never blank-flashes during the fetch.
-    var seriesDetails by remember { mutableStateOf(series) }
-    var loading by remember { mutableStateOf(true) }
+    var seriesDetails by remember { mutableStateOf(cached?.details ?: series) }
+    var loading by remember { mutableStateOf(cached == null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var selectedSeason by remember { mutableStateOf<Int?>(null) }
+    // Seed selectedSeason from the cache so the season tab strip is correct
+    // immediately on a back-from-player remount.
+    var selectedSeason by remember {
+        mutableStateOf<Int?>(
+            cached?.episodes?.let { list ->
+                initialSeason?.takeIf { wanted -> list.any { it.seasonNumber == wanted } }
+                    ?: list.firstOrNull {
+                        val played = it.userData?.played == true
+                        val started = (it.userData?.playbackPositionTicks ?: 0L) > 0L
+                        !played || started
+                    }?.seasonNumber
+                    ?: list.mapNotNull { it.seasonNumber }.filter { it > 0 }.minOrNull()
+                    ?: list.firstOrNull()?.seasonNumber
+            }
+        )
+    }
 
     LaunchedEffect(series.id) {
-        loading = true
+        // If we have a cached list we don't gate on `loading` — the user sees
+        // the cached episodes immediately and the refresh below silently
+        // replaces them when it returns.
+        loading = EpisodesCache.seriesId != series.id
         error = null
 
         // Fire the series-detail fetch in its own coroutine. If it fails
@@ -68,6 +103,7 @@ fun EpisodesScreen(
             try {
                 val full = vm.loadItemDetails(series.id)
                 seriesDetails = full
+                if (EpisodesCache.seriesId == series.id) EpisodesCache.details = full
             } catch (_: Throwable) {
                 // Stay with the slim series. Cast row just won't appear.
             }
@@ -77,6 +113,10 @@ fun EpisodesScreen(
         try {
             val list = vm.loadEpisodes(series.id)
             episodes = list
+            // Cache the result for the next mount of this screen (e.g. after
+            // returning from the player) so the list renders instantly.
+            EpisodesCache.seriesId = series.id
+            EpisodesCache.episodes = list
             // Smart default: jump to the season containing the next unwatched
             // episode so the user doesn't always have to scroll back to where
             // they were. Falls back to the lowest-numbered non-special season.
