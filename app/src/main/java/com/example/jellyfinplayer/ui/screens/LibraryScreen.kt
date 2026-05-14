@@ -951,7 +951,7 @@ fun LibraryScreen(
                                     if (latestMovies.isNotEmpty()) {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             LatestMediaRow(
-                                                title = "Latest movies",
+                                                title = "Recently Added Movies",
                                                 items = latestMovies.take(20),
                                                 vm = vm,
                                                 onViewAll = { openFullList(LibraryViewMode.MOVIES) },
@@ -963,7 +963,7 @@ fun LibraryScreen(
                                     if (latestShows.isNotEmpty()) {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             LatestMediaRow(
-                                                title = "Latest shows",
+                                                title = "Recently Added TV",
                                                 items = latestShows.take(20),
                                                 vm = vm,
                                                 onViewAll = { openFullList(LibraryViewMode.SHOWS) },
@@ -1221,20 +1221,22 @@ private fun FeaturedBanner(
     val backdrop = vm.backdropUrl(item, maxWidth = 1280)
     val artwork = backdrop ?: vm.posterUrl(item, maxHeight = 720)
     val progress = item.playedFraction ?: 0f
+    val remainingMinutes = remainingMinutes(item, progress)
     val title = if (item.type == "Episode" && !item.seriesName.isNullOrBlank()) {
         item.seriesName
     } else {
         item.name
     }
     val subtitle = remember(item) { featuredSubtitle(item) }
+    val meta = remember(item) { featuredMeta(item) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 10.dp)
-            .heightIn(min = 190.dp)
-            .aspectRatio(16f / 8.2f)
-            .clip(RoundedCornerShape(8.dp))
+            .padding(top = 2.dp, bottom = 18.dp)
+            .heightIn(min = 420.dp)
+            .aspectRatio(9f / 12.4f)
+            .clip(RoundedCornerShape(20.dp))
             .background(cs.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
@@ -1264,10 +1266,11 @@ private fun FeaturedBanner(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.horizontalGradient(
-                        0f to Color.Black.copy(alpha = 0.82f),
-                        0.62f to Color.Black.copy(alpha = 0.38f),
-                        1f to Color.Transparent
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.06f),
+                        0.38f to Color.Black.copy(alpha = 0.16f),
+                        0.72f to Color.Black.copy(alpha = 0.76f),
+                        1f to Color.Black.copy(alpha = 0.94f)
                     )
                 )
         )
@@ -1275,54 +1278,95 @@ private fun FeaturedBanner(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.verticalGradient(
+                    Brush.horizontalGradient(
                         0f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.48f)
+                        0.5f to Color.Black.copy(alpha = 0.08f),
+                        1f to Color.Transparent
                     )
                 )
         )
         Column(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth(0.72f)
-                .padding(16.dp)
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 label.uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.78f),
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.76f),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.displayMedium,
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 10.dp)
+            )
+            if (meta.isNotBlank()) {
+                Text(
+                    meta,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.88f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            Button(
+                onClick = onClick,
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                ),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.padding(top = 18.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                if (progress > 0f && progress < 0.99f) {
+                    Spacer(Modifier.width(10.dp))
+                    Box(
+                        Modifier
+                            .width(34.dp)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.16f))
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progress.coerceIn(0.08f, 1f))
+                                .clip(RoundedCornerShape(50))
+                                .background(Color.Black)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    when {
+                        remainingMinutes != null -> "$remainingMinutes min left"
+                        progress > 0f && progress < 0.99f -> "Resume"
+                        else -> "Play"
+                    },
+                    fontWeight = FontWeight.Bold
+                )
             )
             if (subtitle.isNotBlank()) {
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.82f),
-                    maxLines = 1,
+                    color = Color.White.copy(alpha = 0.70f),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 3.dp)
+                    modifier = Modifier.padding(top = 18.dp)
                 )
-            }
-            Button(
-                onClick = onClick,
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                modifier = Modifier.padding(top = 12.dp)
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(if (progress > 0f && progress < 0.99f) "Resume" else "Play")
             }
         }
         if (progress > 0f && progress < 0.99f) {
@@ -1333,10 +1377,23 @@ private fun FeaturedBanner(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(4.dp)
             )
         }
     }
+}
+
+private fun featuredMeta(item: MediaItem): String = buildList {
+    add(if (item.type == "Series") "Series" else if (item.type == "Episode") "Episode" else "Movie")
+    item.communityRating?.let { add("★ ${"%.1f".format(it)}") }
+    item.officialRating?.takeIf { it.isNotBlank() }?.let { add(it) }
+    item.productionYear?.let { add(it.toString()) }
+}.joinToString(" • ")
+
+private fun remainingMinutes(item: MediaItem, progress: Float): Int? {
+    val runtime = item.runtimeMinutes ?: return null
+    if (progress <= 0f || progress >= 0.99f) return null
+    return (runtime * (1f - progress)).toInt().coerceAtLeast(1)
 }
 
 private fun featuredSubtitle(item: MediaItem): String = buildList {
@@ -1454,13 +1511,30 @@ private fun compareNullableStrings(left: String?, right: String?, ascending: Boo
 
 @Composable
 private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
-    )
+    Row(
+        modifier = Modifier.padding(top = 14.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.onBackground,
+            contentColor = MaterialTheme.colorScheme.background,
+            modifier = Modifier.size(28.dp)
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.padding(5.dp)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
 }
 
 @Composable
@@ -1482,7 +1556,7 @@ private fun LatestMediaRow(
         ) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f)

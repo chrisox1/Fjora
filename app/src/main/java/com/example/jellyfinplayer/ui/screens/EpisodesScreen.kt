@@ -155,7 +155,7 @@ fun EpisodesScreen(
             TopAppBar(
                 title = {
                     Text(
-                        series.name,
+                        "",
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -387,7 +387,7 @@ private fun SeriesHero(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(520.dp)
             .background(cs.surfaceVariant) // placeholder under the backdrop
     ) {
         val backdrop = vm.backdropUrl(series, maxWidth = 1280)
@@ -406,9 +406,9 @@ private fun SeriesHero(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.45f),
-                        0.42f to Color.Transparent,
-                        0.74f to cs.background.copy(alpha = 0.58f),
+                        0f to Color.Black.copy(alpha = 0.10f),
+                        0.40f to Color.Black.copy(alpha = 0.05f),
+                        0.70f to cs.background.copy(alpha = 0.42f),
                         1f to cs.background
                     )
                 )
@@ -418,8 +418,8 @@ private fun SeriesHero(
                 .fillMaxSize()
                 .background(
                     Brush.horizontalGradient(
-                        0f to Color.Black.copy(alpha = 0.62f),
-                        0.58f to Color.Transparent
+                        0f to Color.Black.copy(alpha = 0.42f),
+                        0.70f to Color.Transparent
                     )
                 )
         )
@@ -428,31 +428,44 @@ private fun SeriesHero(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .tabletContentWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .padding(horizontal = 20.dp, vertical = 28.dp)
         ) {
             Text(
                 series.name,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.displaySmall,
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             val meta = buildList {
                 series.productionYear?.let { add(it.toString()) }
                 series.officialRating?.takeIf { it.isNotBlank() }?.let { add(it) }
+                series.runtimeMinutes?.let { add("${it}m") }
                 series.communityRating?.let { add("Rating ${"%.1f".format(it)}") }
-            }.joinToString(" - ")
+            }
             if (meta.isNotEmpty()) {
-                Text(
-                    meta,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(meta) { value ->
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.Black.copy(alpha = 0.40f),
+                            contentColor = Color.White
+                        ) {
+                            Text(
+                                value,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
             }
             if (playTarget != null) {
-                Spacer(Modifier.height(12.dp))
                 val started = (playTarget.userData?.playbackPositionTicks ?: 0L) > 0L
                 val targetLabel = if (started) "Resume" else "Play"
                 val episodeLabel = playTarget.takeIf { it.type == "Episode" }?.let { ep ->
@@ -460,22 +473,36 @@ private fun SeriesHero(
                     val e = ep.episodeNumber?.let { "E$it" } ?: ""
                     listOf(s, e).filter { it.isNotEmpty() }.joinToString("")
                 }
-                Button(
-                    onClick = onPlayClick,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
-                    ),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (episodeLabel.isNullOrBlank()) targetLabel else "$targetLabel $episodeLabel",
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.titleSmall
-                    )
+                    Button(
+                        onClick = onPlayClick,
+                        shape = RoundedCornerShape(50),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black
+                        ),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 13.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (episodeLabel.isNullOrBlank()) targetLabel else episodeLabel,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    HeroActionChip {
+                        Icon(
+                            com.example.jellyfinplayer.ui.icons.DownloadIconVector,
+                            contentDescription = "Download"
+                        )
+                    }
+                    HeroActionChip {
+                        Icon(Icons.Default.Check, contentDescription = "Watched")
+                    }
                 }
             }
         }
@@ -483,18 +510,41 @@ private fun SeriesHero(
 }
 
 @Composable
+private fun HeroActionChip(content: @Composable BoxScope.() -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.42f),
+        contentColor = Color.White,
+        modifier = Modifier.size(52.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center, content = content)
+    }
+}
+
+@Composable
 private fun SeriesOverview(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .tabletContentWidth()
             .wrapContentWidth(Alignment.CenterHorizontally)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(horizontal = 20.dp, vertical = 22.dp)
             .animateContentSize()
-    )
+    ) {
+        Text(
+            "Overview",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
+            modifier = Modifier.padding(top = 18.dp)
+        )
+    }
 }
 
 @Composable
@@ -504,18 +554,18 @@ private fun EpisodeSectionHeader(selectedSeason: Int?, count: Int) {
             .fillMaxWidth()
             .tabletContentWidth()
             .wrapContentWidth(Alignment.CenterHorizontally)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            if (selectedSeason == 0) "Specials" else "Season ${selectedSeason ?: ""}",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
+            "Episodes",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
         Text(
-            "$count episode${if (count == 1) "" else "s"}",
+            if (selectedSeason == 0) "Specials" else "$count episode${if (count == 1) "" else "s"}",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -534,8 +584,8 @@ private fun SeasonTabs(
         return
     }
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .fillMaxWidth()
             .tabletContentWidth()
@@ -544,9 +594,9 @@ private fun SeasonTabs(
             val isSelected = season == selected
             Surface(
                 shape = RoundedCornerShape(50),
-                color = if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
-                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                color = if (isSelected) MaterialTheme.colorScheme.onBackground
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+                contentColor = if (isSelected) MaterialTheme.colorScheme.background
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.clickable { onSelect(season) }
             ) {
@@ -554,12 +604,12 @@ private fun SeasonTabs(
                     if (season == 0) "Specials" else "Season $season",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
                 )
             }
         }
     }
-    Spacer(Modifier.height(4.dp))
+    Spacer(Modifier.height(12.dp))
 }
 
 @Composable
@@ -573,22 +623,22 @@ private fun EpisodeRow(vm: AppViewModel, ep: MediaItem, onClick: () -> Unit) {
             .fillMaxWidth()
             .tabletContentWidth()
             .wrapContentWidth(Alignment.CenterHorizontally)
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = cs.surfaceVariant.copy(alpha = 0.30f)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.Top
         ) {
             Box(
                 Modifier
-                    .width(132.dp)
+                    .width(150.dp)
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(cs.surfaceVariant)
             ) {
                 val url = vm.posterUrl(ep, maxHeight = 240)
@@ -655,17 +705,31 @@ private fun EpisodeRow(vm: AppViewModel, ep: MediaItem, onClick: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 val number = ep.episodeNumber?.let { "E$it" }
-                Text(
-                    buildString {
-                        if (number != null) append("$number  ")
-                        append(ep.name)
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (played) cs.onSurfaceVariant else cs.onBackground,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (number != null) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = cs.surfaceVariant.copy(alpha = 0.70f),
+                            contentColor = cs.onSurfaceVariant
+                        ) {
+                            Text(
+                                number,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                        ep.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (played) cs.onSurfaceVariant else cs.onBackground,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(top = 3.dp)
