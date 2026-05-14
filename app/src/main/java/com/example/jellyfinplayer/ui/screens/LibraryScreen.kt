@@ -75,8 +75,6 @@ private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
     var firstVisibleItemIndex: Int = 0
     var firstVisibleItemScrollOffset: Int = 0
-    var homeReturnIndex: Int = 0
-    var homeReturnOffset: Int = 0
 }
 
 /**
@@ -146,10 +144,22 @@ fun LibraryScreen(
     var fullListSearchOpen by remember { mutableStateOf(false) }
     var fullListSearchQuery by remember { mutableStateOf("") }
     var homeReturnIndex by remember {
-        mutableIntStateOf(LibraryNavigationSnapshot.homeReturnIndex)
+        mutableIntStateOf(
+            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
+                LibraryNavigationSnapshot.firstVisibleItemIndex
+            } else {
+                0
+            }
+        )
     }
     var homeReturnOffset by remember {
-        mutableIntStateOf(LibraryNavigationSnapshot.homeReturnOffset)
+        mutableIntStateOf(
+            if (LibraryNavigationSnapshot.viewMode == LibraryViewMode.HOME) {
+                LibraryNavigationSnapshot.firstVisibleItemScrollOffset
+            } else {
+                0
+            }
+        )
     }
     var searchOpen by remember { mutableStateOf(false) }
     var showServerInfoDialog by remember { mutableStateOf(false) }
@@ -202,8 +212,6 @@ fun LibraryScreen(
         LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
         LibraryNavigationSnapshot.firstVisibleItemIndex = homeReturnIndex
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = homeReturnOffset
-        LibraryNavigationSnapshot.homeReturnIndex = homeReturnIndex
-        LibraryNavigationSnapshot.homeReturnOffset = homeReturnOffset
         viewMode = LibraryViewMode.HOME
     }
 
@@ -236,8 +244,6 @@ fun LibraryScreen(
             LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
-            LibraryNavigationSnapshot.homeReturnIndex = 0
-            LibraryNavigationSnapshot.homeReturnOffset = 0
             LatestRowsScrollSnapshot.reset()
             observedSelectedLibraryId = selectedLibraryId
         }
@@ -332,7 +338,7 @@ fun LibraryScreen(
             // Instant scroll so coming back to the home grid lands exactly
             // where the user left off — animated scroll here read as a
             // "swipe down" jolt.
-            gridState.scrollToItem(homeReturnIndex, homeReturnOffset)
+            gridState.animateScrollToItem(homeReturnIndex, homeReturnOffset)
         } else {
             gridState.scrollToItem(0)
         }
@@ -435,8 +441,6 @@ fun LibraryScreen(
     val openFullList: (LibraryViewMode) -> Unit = { mode ->
         homeReturnIndex = gridState.firstVisibleItemIndex
         homeReturnOffset = gridState.firstVisibleItemScrollOffset
-        LibraryNavigationSnapshot.homeReturnIndex = homeReturnIndex
-        LibraryNavigationSnapshot.homeReturnOffset = homeReturnOffset
         LibraryNavigationSnapshot.viewMode = mode
         LibraryNavigationSnapshot.firstVisibleItemIndex = 0
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
