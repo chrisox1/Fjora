@@ -792,7 +792,7 @@ fun LibraryScreen(
             }
         }
     ) { padding ->
-        Column(
+        Box(
             Modifier
                 .fillMaxSize()
                 .padding(padding)
