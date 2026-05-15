@@ -255,12 +255,10 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
         } else {
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
-        if (!inAnyPlayer &&
-            android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P
-        ) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             activity?.window?.attributes = activity?.window?.attributes?.apply {
                 layoutInDisplayCutoutMode =
-                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
     }

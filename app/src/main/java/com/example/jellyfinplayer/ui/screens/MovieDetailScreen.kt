@@ -111,33 +111,34 @@ fun MovieDetailScreen(
                 )
             }
 
-            MediaFactChips(details)
-            MediaUserActions(
-                item = details,
-                busy = userDataUpdating,
-                onFavoriteToggle = {
-                    actionScope.launch {
-                        userDataUpdating = true
-                        runCatching {
-                            vm.setFavorite(details, details.userData?.isFavorite != true)
-                        }.onSuccess { details = it }
-                        userDataUpdating = false
-                    }
-                },
-                onWatchedToggle = if (details.type == "Movie" || details.type == "Episode") {
-                    {
+            MediaFactChips(details) {
+                MediaUserActions(
+                    item = details,
+                    busy = userDataUpdating,
+                    onFavoriteToggle = {
                         actionScope.launch {
                             userDataUpdating = true
                             runCatching {
-                                vm.setPlayed(details, details.userData?.played != true)
+                                vm.setFavorite(details, details.userData?.isFavorite != true)
                             }.onSuccess { details = it }
                             userDataUpdating = false
                         }
+                    },
+                    onWatchedToggle = if (details.type == "Movie" || details.type == "Episode") {
+                        {
+                            actionScope.launch {
+                                userDataUpdating = true
+                                runCatching {
+                                    vm.setPlayed(details, details.userData?.played != true)
+                                }.onSuccess { details = it }
+                                userDataUpdating = false
+                            }
+                        }
+                    } else {
+                        null
                     }
-                } else {
-                    null
-                }
-            )
+                )
+            }
             Spacer(Modifier.height(12.dp))
 
             // Primary CTA row — Resume/Play and Download. Both full-width
@@ -499,10 +500,12 @@ internal fun Hero(
 }
 
 @Composable
-private fun MediaFactChips(item: MediaItem) {
+private fun MediaFactChips(
+    item: MediaItem,
+    trailingContent: @Composable RowScope.() -> Unit = {}
+) {
     val cs = MaterialTheme.colorScheme
     val facts = remember(item) { mediaFactLabels(item) }
-    if (facts.isEmpty()) return
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -528,6 +531,7 @@ private fun MediaFactChips(item: MediaItem) {
                 )
             }
         }
+        trailingContent()
     }
 }
 
@@ -539,12 +543,7 @@ private fun MediaUserActions(
     onWatchedToggle: (() -> Unit)?
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .tabletContentWidth()
-            .wrapContentWidth(Alignment.CenterHorizontally)
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val favorite = item.userData?.isFavorite == true
         SubtleActionIcon(
@@ -589,16 +588,18 @@ private fun SubtleActionIcon(
         color = if (active) cs.primary.copy(alpha = 0.14f)
             else cs.surfaceVariant.copy(alpha = 0.26f),
         contentColor = if (active) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.82f),
-        modifier = Modifier.size(42.dp)
+        modifier = Modifier.size(34.dp)
     ) {
-        IconButton(
-            enabled = enabled,
-            onClick = onClick,
+        Box(
             modifier = Modifier.fillMaxSize()
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = contentDescription,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                content()
-            }
+            content()
         }
     }
 }

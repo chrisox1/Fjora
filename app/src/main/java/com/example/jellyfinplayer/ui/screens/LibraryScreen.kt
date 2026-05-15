@@ -976,8 +976,8 @@ fun LibraryScreen(
                                             subtitle = "Movies, shows, and episodes",
                                             kind = ServerLibraryKind.FAVORITES,
                                             imageUrl = libraryPreviewItems[FAVORITES_TAB_ID]?.let {
-                                                vm.backdropUrl(it, maxWidth = 600)
-                                                    ?: vm.posterUrl(it, maxHeight = 480)
+                                                vm.posterUrl(it, maxHeight = 480)
+                                                    ?: vm.backdropUrl(it, maxWidth = 600)
                                             },
                                             onClick = {
                                                 saveLibraryPosition()
@@ -1001,8 +1001,8 @@ fun LibraryScreen(
                                                 ServerLibraryKind.MOVIES
                                             },
                                             imageUrl = libraryPreviewItems[library.id]?.let {
-                                                vm.backdropUrl(it, maxWidth = 600)
-                                                    ?: vm.posterUrl(it, maxHeight = 480)
+                                                vm.posterUrl(it, maxHeight = 480)
+                                                    ?: vm.backdropUrl(it, maxWidth = 600)
                                             },
                                             onClick = {
                                                 saveLibraryPosition()
@@ -1149,7 +1149,9 @@ fun LibraryScreen(
                     }
                 }
             }
-            if (!isSearchMode && !fullListSearchOpen && viewMode == LibraryViewMode.HOME) {
+            if (!isSearchMode && !fullListSearchOpen && viewMode == LibraryViewMode.HOME &&
+                selectedLibraryId == null
+            ) {
                 HomeOverlayControls(
                     refreshing = refreshing,
                     onSearchClick = openHomeSearch,
@@ -1804,11 +1806,17 @@ private fun LatestMediaRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    Column(Modifier.padding(top = 14.dp)) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    Column(
+        Modifier
+            .requiredWidth(screenWidth + 40.dp)
+            .offset(x = (-16).dp)
+            .padding(top = 14.dp)
+    ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .padding(start = 16.dp, end = 56.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -1825,7 +1833,7 @@ private fun LatestMediaRow(
         LazyRow(
             state = state,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 2.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 56.dp, bottom = 2.dp)
         ) {
             items(items, key = { it.id }) { item ->
                 LibraryCard(
@@ -1850,10 +1858,14 @@ private fun WideRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     LazyRow(
         state = state,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 56.dp, top = 4.dp, bottom = 4.dp),
+        modifier = Modifier
+            .requiredWidth(screenWidth + 40.dp)
+            .offset(x = (-16).dp)
     ) {
         items(items, key = { it.id }) { item ->
             WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
