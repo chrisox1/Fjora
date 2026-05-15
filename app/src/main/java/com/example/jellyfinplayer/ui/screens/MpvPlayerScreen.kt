@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -39,7 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -103,6 +107,7 @@ fun MpvPlayerScreen(
     val activity = ctx as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
+    val density = LocalDensity.current
     val audioManager = remember(ctx) {
         ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
     }
@@ -117,6 +122,7 @@ fun MpvPlayerScreen(
     var dragFraction by remember { mutableFloatStateOf(0f) }
     var resumeAfterDrag by remember { mutableStateOf(false) }
     var ignorePositionPollUntilMs by remember { mutableLongStateOf(0L) }
+    var seekBarWidthPx by remember { mutableFloatStateOf(1f) }
     // True once loadfile has been issued. Prevents re-issuing loadfile when
     // the SurfaceView surface is destroyed and recreated (e.g. going home and
     // returning, or the system briefly reclaiming the surface in PiP).
@@ -1005,58 +1011,99 @@ fun MpvPlayerScreen(
                     color = Color.White,
                     style = MaterialTheme.typography.labelMedium
                 )
-                Slider(
-                    value = if (isDragging) dragFraction
-                    else if (durationMs > 0)
-                        (smoothPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                    else 0f,
-                    onValueChange = { fraction ->
-                        if (!isDragging) {
-                            resumeAfterDrag = MPVLib.getPropertyBoolean("pause") == false
-                            runCatching { MPVLib.setPropertyBoolean("pause", true) }
-                            isPlaying = false
-                            isDragging = true
-                        }
-                        dragFraction = fraction.coerceIn(0f, 1f)
-                        val targetMs = (dragFraction * durationMs).toLong()
+                val displayedFraction = if (isDragging) {
+                    dragFraction
+                } else if (durationMs > 0) {
+                    (smoothPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                val thumbOffset = with(density) {
+                    (seekBarWidthPx * displayedFraction).toDp()
+                }
+                fun updateDragFromX(x: Float) {
+                    if (durationMs <= 0L) return
+                    val fraction = (x / seekBarWidthPx).coerceIn(0f, 1f)
+                    if (!isDragging) {
+                        resumeAfterDrag = isPlaying
+                        isDragging = true
+                    }
+                    dragFraction = fraction
+                    val targetMs = (fraction * durationMs).toLong()
+                    positionMs = targetMs
+                    smoothPositionMs = targetMs
+                    lastPollWallMs = System.currentTimeMillis()
+                }
+                fun finishDrag() {
+                    if (!isDragging || durationMs <= 0L) {
+                        resumeAfterDrag = false
+                        isDragging = false
+                        return
+                    }
+                    val targetMs = (dragFraction * durationMs).toLong()
+                    val shouldResume = resumeAfterDrag
+                    positionMs = targetMs
+                    smoothPositionMs = targetMs
+                    lastPollWallMs = System.currentTimeMillis()
+                    ignorePositionPollUntilMs = System.currentTimeMillis() + 1_200L
+                    resumeAfterDrag = false
+                    isDragging = false
+                    subScope.launch {
+                        showMpvSeekLoading()
+                        seekMpvAbsolute(
+                            positionMs = targetMs,
+                            resumePlayback = shouldResume
+                        )
+                        resetMpvSubtitleTiming()
                         positionMs = targetMs
                         smoothPositionMs = targetMs
                         lastPollWallMs = System.currentTimeMillis()
-                    },
-                    onValueChangeFinished = {
-                        if (durationMs > 0) {
-                            val targetMs = (dragFraction * durationMs).toLong()
-                            val shouldResume = resumeAfterDrag
-                            positionMs = targetMs
-                            smoothPositionMs = targetMs
-                            lastPollWallMs = System.currentTimeMillis()
-                            ignorePositionPollUntilMs = System.currentTimeMillis() + 1_200L
-                            resumeAfterDrag = false
-                            isDragging = false
-                            subScope.launch {
-                                showMpvSeekLoading()
-                                seekMpvAbsolute(
-                                    positionMs = targetMs,
-                                    resumePlayback = shouldResume
-                                )
-                                resetMpvSubtitleTiming()
-                                positionMs = targetMs
-                                smoothPositionMs = targetMs
-                                lastPollWallMs = System.currentTimeMillis()
-                                isPlaying = shouldResume
-                            }
-                        } else {
-                            resumeAfterDrag = false
-                            isDragging = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                        isPlaying = shouldResume
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .onSizeChanged { seekBarWidthPx = it.width.toFloat().coerceAtLeast(1f) }
+                        .pointerInput(durationMs) {
+                            detectDragGestures(
+                                onDragStart = { offset -> updateDragFromX(offset.x) },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    updateDragFromX(change.position.x)
+                                },
+                                onDragEnd = { finishDrag() },
+                                onDragCancel = {
+                                    resumeAfterDrag = false
+                                    isDragging = false
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.3f))
                     )
-                )
+                    Box(
+                        Modifier
+                            .fillMaxWidth(displayedFraction)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White)
+                    )
+                    Box(
+                        Modifier
+                            .offset(x = thumbOffset - 7.dp)
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                }
             }
         }
 
