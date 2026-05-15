@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,6 +48,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -645,6 +647,24 @@ fun LibraryScreen(
         saveLibraryPosition()
         onSettingsClick()
     }
+    val topBarSafeTop = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+    val searchTopBarVisible = isSearchMode ||
+        (viewMode != LibraryViewMode.HOME && fullListSearchOpen)
+    val thickTopBarVisible = !searchTopBarVisible &&
+        (viewMode != LibraryViewMode.HOME || showingDownloads)
+    val animatedTopBarHeight by animateDpAsState(
+        targetValue = when {
+            searchTopBarVisible -> topBarSafeTop + 72.dp
+            thickTopBarVisible -> topBarSafeTop + 64.dp
+            else -> 0.dp
+        },
+        animationSpec = tween(durationMillis = 220),
+        label = "library_top_bar_height"
+    )
+    val showHomeOverlayControls = !isSearchMode &&
+        !fullListSearchOpen &&
+        viewMode == LibraryViewMode.HOME &&
+        selectedLibraryId == null
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -672,86 +692,103 @@ fun LibraryScreen(
             }
         },
         topBar = {
-            if (isSearchMode) {
-                SearchTopBar {
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChange = { vm.setSearchQuery(it) },
-                        onClear = {
-                            vm.clearSearch()
-                            searchOpen = false
-                            pendingSearchRestore = true
-                            keyboard?.hide()
-                        },
-                        onSubmit = { keyboard?.hide() },
-                        modifier = Modifier.focusRequester(searchFocusRequester)
-                    )
-                }
-            } else if (viewMode != LibraryViewMode.HOME && fullListSearchOpen) {
-                SearchTopBar {
-                    SearchBar(
-                        query = fullListSearchQuery,
-                        onQueryChange = { fullListSearchQuery = it },
-                        onClear = {
-                            fullListSearchOpen = false
-                            fullListSearchQuery = ""
-                            pendingFullListSearchRestore = true
-                            keyboard?.hide()
-                        },
-                        onSubmit = { keyboard?.hide() },
-                        modifier = Modifier.focusRequester(searchFocusRequester)
-                    )
-                }
-            } else if (viewMode != LibraryViewMode.HOME || showingDownloads) {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            when {
-                                showingDownloads -> "Downloads"
-                                showingFavorites -> "Favorites"
-                                showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                                else -> viewMode.title
-                            },
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { handleTopBack() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
-                            )
-                        }
-                    },
-                    actions = {
-                        if (showingSearchableFullList) {
-                            IconButton(onClick = {
-                                fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
-                                fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
-                                fullListSearchOpen = true
-                            }) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Search ${
-                                        when {
-                                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                                            else -> viewMode.title
-                                        }
-                                    }"
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(animatedTopBarHeight)
+                    .clipToBounds()
+            ) {
+                AnimatedVisibility(
+                    visible = animatedTopBarHeight > 1.dp,
+                    enter = fadeIn(animationSpec = tween(140)),
+                    exit = fadeOut(animationSpec = tween(110))
+                ) {
+                    when {
+                        isSearchMode -> {
+                            SearchTopBar {
+                                SearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { vm.setSearchQuery(it) },
+                                    onClear = {
+                                        vm.clearSearch()
+                                        searchOpen = false
+                                        pendingSearchRestore = true
+                                        keyboard?.hide()
+                                    },
+                                    onSubmit = { keyboard?.hide() },
+                                    modifier = Modifier.focusRequester(searchFocusRequester)
                                 )
                             }
-                            IconButton(onClick = { showSortDialog = true }) {
-                                Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                        }
+                        viewMode != LibraryViewMode.HOME && fullListSearchOpen -> {
+                            SearchTopBar {
+                                SearchBar(
+                                    query = fullListSearchQuery,
+                                    onQueryChange = { fullListSearchQuery = it },
+                                    onClear = {
+                                        fullListSearchOpen = false
+                                        fullListSearchQuery = ""
+                                        pendingFullListSearchRestore = true
+                                        keyboard?.hide()
+                                    },
+                                    onSubmit = { keyboard?.hide() },
+                                    modifier = Modifier.focusRequester(searchFocusRequester)
+                                )
                             }
                         }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent
-                    )
-                )
+                        viewMode != LibraryViewMode.HOME || showingDownloads -> {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        when {
+                                            showingDownloads -> "Downloads"
+                                            showingFavorites -> "Favorites"
+                                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                            else -> viewMode.title
+                                        },
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = { handleTopBack() }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back"
+                                        )
+                                    }
+                                },
+                                actions = {
+                                    if (showingSearchableFullList) {
+                                        IconButton(onClick = {
+                                            fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
+                                            fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
+                                            fullListSearchOpen = true
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Search,
+                                                contentDescription = "Search ${
+                                                    when {
+                                                        showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                                        else -> viewMode.title
+                                                    }
+                                                }"
+                                            )
+                                        }
+                                        IconButton(onClick = { showSortDialog = true }) {
+                                            Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                                        }
+                                    }
+                                },
+                                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                    containerColor = Color.Transparent
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     ) { padding ->
@@ -1153,15 +1190,17 @@ fun LibraryScreen(
                     }
                 }
             }
-            if (!isSearchMode && !fullListSearchOpen && viewMode == LibraryViewMode.HOME &&
-                selectedLibraryId == null
+            AnimatedVisibility(
+                visible = showHomeOverlayControls,
+                enter = fadeIn(animationSpec = tween(140)),
+                exit = fadeOut(animationSpec = tween(110)),
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 HomeOverlayControls(
                     refreshing = refreshing,
                     onSearchClick = openHomeSearch,
                     onRefreshClick = refreshHome,
-                    onSettingsClick = openSettings,
-                    modifier = Modifier.align(Alignment.TopCenter)
+                    onSettingsClick = openSettings
                 )
             }
         }

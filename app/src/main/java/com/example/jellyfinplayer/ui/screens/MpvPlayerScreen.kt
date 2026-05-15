@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -1034,6 +1035,28 @@ fun MpvPlayerScreen(
                     smoothPositionMs = targetMs
                     lastPollWallMs = System.currentTimeMillis()
                 }
+                fun seekToX(x: Float) {
+                    if (durationMs <= 0L) return
+                    val fraction = (x / seekBarWidthPx).coerceIn(0f, 1f)
+                    val targetMs = (fraction * durationMs).toLong()
+                    val shouldResume = isPlaying
+                    positionMs = targetMs
+                    smoothPositionMs = targetMs
+                    lastPollWallMs = System.currentTimeMillis()
+                    ignorePositionPollUntilMs = System.currentTimeMillis() + 1_200L
+                    subScope.launch {
+                        showMpvSeekLoading()
+                        seekMpvAbsolute(
+                            positionMs = targetMs,
+                            resumePlayback = shouldResume
+                        )
+                        resetMpvSubtitleTiming()
+                        positionMs = targetMs
+                        smoothPositionMs = targetMs
+                        lastPollWallMs = System.currentTimeMillis()
+                        isPlaying = shouldResume
+                    }
+                }
                 fun finishDrag() {
                     if (!isDragging || durationMs <= 0L) {
                         resumeAfterDrag = false
@@ -1066,6 +1089,11 @@ fun MpvPlayerScreen(
                         .fillMaxWidth()
                         .height(36.dp)
                         .onSizeChanged { seekBarWidthPx = it.width.toFloat().coerceAtLeast(1f) }
+                        .pointerInput(durationMs) {
+                            detectTapGestures(
+                                onTap = { offset -> seekToX(offset.x) }
+                            )
+                        }
                         .pointerInput(durationMs) {
                             detectDragGestures(
                                 onDragStart = { offset -> updateDragFromX(offset.x) },
