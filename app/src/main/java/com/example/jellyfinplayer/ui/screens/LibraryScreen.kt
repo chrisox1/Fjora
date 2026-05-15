@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -2310,21 +2311,21 @@ private fun FjoraBottomNavigation(
                 selected = selected == BottomDestination.HOME,
                 onClick = onHomeClick,
                 icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                label = { Text("Home") },
+                label = { BottomNavLabel("Home") },
                 colors = fjoraBottomNavigationItemColors()
             )
             NavigationBarItem(
                 selected = selected == BottomDestination.LIBRARIES,
                 onClick = onLibrariesClick,
                 icon = { Icon(Icons.Default.Movie, contentDescription = null) },
-                label = { Text("Libraries") },
+                label = { BottomNavLabel("Libraries") },
                 colors = fjoraBottomNavigationItemColors()
             )
             NavigationBarItem(
                 selected = false,
                 onClick = onSearchClick,
                 icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                label = { Text("Search") },
+                label = { BottomNavLabel("Search") },
                 colors = fjoraBottomNavigationItemColors()
             )
             NavigationBarItem(
@@ -2336,11 +2337,22 @@ private fun FjoraBottomNavigation(
                         contentDescription = null
                     )
                 },
-                label = { Text("Downloads") },
+                label = { BottomNavLabel("Downloads") },
                 colors = fjoraBottomNavigationItemColors()
             )
         }
     }
+}
+
+@Composable
+private fun BottomNavLabel(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.width(82.dp),
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
