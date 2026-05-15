@@ -7,6 +7,8 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -65,7 +67,6 @@ import com.example.jellyfinplayer.AppViewModel
 import com.example.jellyfinplayer.UiState
 import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.data.HomeHeroSource
-import com.example.jellyfinplayer.ui.components.DownloadStatus
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
 
 private enum class LibraryViewMode(val title: String) {
@@ -74,6 +75,12 @@ private enum class LibraryViewMode(val title: String) {
     MOVIES("Movies"),
     SHOWS("Shows")
 }
+
+private data class LibraryContentTarget(
+    val viewMode: LibraryViewMode,
+    val isSearchMode: Boolean,
+    val selectedLibraryId: String?
+)
 
 private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
@@ -727,7 +734,13 @@ fun LibraryScreen(
             if (isSearchMode) {
                 Surface(
                     color = MaterialTheme.colorScheme.background,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            top = WindowInsets.safeDrawing
+                                .asPaddingValues()
+                                .calculateTopPadding()
+                        )
                 ) {
                     SearchBar(
                         query = searchQuery,
@@ -768,25 +781,39 @@ fun LibraryScreen(
 
             Box(Modifier.fillMaxSize()) {
                 AnimatedContent(
-                    targetState = viewMode,
+                    targetState = LibraryContentTarget(
+                        viewMode = viewMode,
+                        isSearchMode = isSearchMode,
+                        selectedLibraryId = selectedLibraryId
+                    ),
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(90)) togetherWith
-                            fadeOut(animationSpec = tween(60))
+                        val forward = targetState.viewMode.ordinal >= initialState.viewMode.ordinal
+                        val slide = if (forward) 48 else -48
+                        val enter = slideInHorizontally(animationSpec = tween(170)) { slide } +
+                            fadeIn(animationSpec = tween(140))
+                        val exit = slideOutHorizontally(animationSpec = tween(170)) { -slide / 2 } +
+                            fadeOut(animationSpec = tween(120))
+                        (enter togetherWith exit).apply {
+                            targetContentZIndex = if (forward) 1f else 0f
+                        }
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
-                ) { animatedViewMode ->
+                ) { animatedTarget ->
+                    val animatedViewMode = animatedTarget.viewMode
+                    val animatedIsSearchMode = animatedTarget.isSearchMode
+                    val animatedSelectedLibraryId = animatedTarget.selectedLibraryId
                     val animatedFullListItems = remember(
                         items,
                         animatedViewMode,
-                        selectedLibraryId,
+                        animatedSelectedLibraryId,
                         sortKey,
                         sortAscending
                     ) {
                         val base = when (animatedViewMode) {
-                            LibraryViewMode.LIBRARIES -> if (selectedLibraryId == null) {
+                            LibraryViewMode.LIBRARIES -> if (animatedSelectedLibraryId == null) {
                                 emptyList()
-                            } else if (selectedLibraryId == FAVORITES_TAB_ID) {
+                            } else if (animatedSelectedLibraryId == FAVORITES_TAB_ID) {
                                 items.filter {
                                     it.type == "Movie" || it.type == "Series" || it.type == "Episode"
                                 }
@@ -845,8 +872,8 @@ fun LibraryScreen(
                                 end = 16.dp,
                                 top = if (
                                     animatedViewMode == LibraryViewMode.HOME &&
-                                    selectedLibraryId == null &&
-                                    !isSearchMode
+                                    animatedSelectedLibraryId == null &&
+                                    !animatedIsSearchMode
                                 ) {
                                     0.dp
                                 } else {
@@ -857,7 +884,7 @@ fun LibraryScreen(
                             verticalArrangement = Arrangement.spacedBy(18.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            if (isSearchMode) {
+                            if (animatedIsSearchMode) {
                                 when {
                                     searchQuery.isBlank() -> {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -898,7 +925,7 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
-                            } else if (selectedLibraryId == DOWNLOADS_TAB_ID) {
+                            } else if (animatedSelectedLibraryId == DOWNLOADS_TAB_ID) {
                                 // Downloads tab — render the user's local
                                 // download records grouped: each unique
                                 // series becomes a single card (tap to see
@@ -924,6 +951,7 @@ fun LibraryScreen(
                                         when (entry) {
                                             is DownloadEntry.Movie -> DownloadCard(
                                                 record = entry.record,
+                                                vm = vm,
                                                 onClick = {
                                                     saveLibraryPosition()
                                                     warmDownloadImages(
@@ -939,6 +967,7 @@ fun LibraryScreen(
                                             )
                                             is DownloadEntry.SeriesGroup -> SeriesDownloadCard(
                                                 group = entry,
+                                                vm = vm,
                                                 onClick = {
                                                     saveLibraryPosition()
                                                     warmDownloadImages(
@@ -953,7 +982,7 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
-                            } else if (animatedViewMode == LibraryViewMode.LIBRARIES && selectedLibraryId == null) {
+                            } else if (animatedViewMode == LibraryViewMode.LIBRARIES && animatedSelectedLibraryId == null) {
                                 if (libraries.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         EmptyBlock(
@@ -1836,10 +1865,8 @@ private fun LatestMediaRow(
         LazyRow(
             state = state,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 2.dp),
-            modifier = Modifier
-                .requiredWidth(LocalConfiguration.current.screenWidthDp.dp)
-                .offset(x = (-16).dp)
+            contentPadding = PaddingValues(bottom = 2.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             items(items, key = { it.id }) { item ->
                 LibraryCard(
@@ -1867,10 +1894,8 @@ private fun WideRow(
     LazyRow(
         state = state,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
-        modifier = Modifier
-            .requiredWidth(LocalConfiguration.current.screenWidthDp.dp)
-            .offset(x = (-16).dp)
+        contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
         items(items, key = { it.id }) { item ->
             WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
@@ -1972,17 +1997,25 @@ private fun WideCard(item: MediaItem, vm: AppViewModel, showProgress: Boolean, o
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun LibraryCard(
     item: MediaItem,
     vm: AppViewModel,
     onClick: () -> Unit,
     showTypeBadge: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    imageUrlOverride: String? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    Column(modifier = modifier.clickable { onClick() }) {
+    Column(
+        modifier = modifier.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick
+        )
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -1990,7 +2023,7 @@ private fun LibraryCard(
                 .clip(RoundedCornerShape(8.dp))
                 .background(cs.surfaceVariant)
         ) {
-            val url = vm.posterUrl(item)
+            val url = imageUrlOverride ?: vm.posterUrl(item)
             if (url != null) {
                 val imageRequest = remember(url, context) {
                     coil.request.ImageRequest.Builder(context)
@@ -2432,182 +2465,28 @@ private fun LibraryTabChip(label: String, selected: Boolean, onClick: () -> Unit
     }
 }
 
-/**
- * Card for a downloaded item in the My Downloads grid. Mirrors the layout
- * of LibraryCard (poster on top, title below) but adds:
- *   - A "downloaded" check-mark badge in the corner so the user can see at
- *     a glance which items are saved offline.
- *   - Long-press to delete the download (with a confirm dialog).
- *   - Subtitle row showing original quality vs. transcoded quality so the
- *     user remembers what they grabbed.
- *
- * Uses combinedClickable so a regular tap plays and a long-press deletes.
- */
+/** Downloaded movie card rendered with the same poster card as streamed items. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun DownloadCard(
     record: com.example.jellyfinplayer.data.DownloadsStore.DownloadRecord,
+    vm: AppViewModel,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
-    val context = LocalContext.current
     var showDeleteDialog by remember { mutableStateOf(false) }
-    // Live status from DownloadManager — drives the progress overlay and
-    // gates the tap-to-play action so users can't try to play a half-
-    // downloaded file.
     val status = rememberDownloadStatus(record.downloadId)
+    val item = remember(record) { record.toMediaItem() }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = {
-                    // Only allow play once the file is fully downloaded.
-                    // The progress overlay below tells the user why a tap
-                    // does nothing on an in-flight download.
-                    if (status.isComplete) onClick()
-                },
-                onLongClick = { showDeleteDialog = true }
-            )
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.66f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(cs.surfaceVariant)
-        ) {
-            if (!record.posterUrl.isNullOrBlank()) {
-                val imageRequest = remember(record.posterUrl, context) {
-                    coil.request.ImageRequest.Builder(context)
-                        .data(record.posterUrl)
-                        .size(360, 540)
-                        .crossfade(false)
-                        .build()
-                }
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = record.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            // Status overlay layers ON TOP of the poster:
-            //   - while in-flight: a scrim with a percentage / spinner
-            //   - on failure: a "Failed" badge in red
-            //   - on success: nothing (just the offline check badge below)
-            when {
-                status.isInFlight -> {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.6f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            if (status.progress != null) {
-                                CircularProgressIndicator(
-                                    progress = status.progress,
-                                    color = Color.White,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "${(status.progress * 100).toInt()}%",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "Starting…",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Button(
-                                onClick = { onDelete() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White,
-                                    contentColor = Color.Black
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text("Cancel", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                }
-                status.state == DownloadStatus.State.Failed -> {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.55f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Failed",
-                            color = cs.error,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-            // Offline indicator badge — only shown for completed downloads
-            // so it doesn't compete with the progress overlay.
-            if (status.isComplete) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .clip(CircleShape)
-                        .background(cs.primary)
-                        .padding(4.dp)
-                ) {
-                    Icon(
-                        imageVector = com.example.jellyfinplayer.ui.icons.DownloadIconVector,
-                        contentDescription = "Downloaded",
-                        tint = cs.onPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        // Title — for episodes, prepend the series name and S/E label so
-        // the user can tell episodes of different shows apart in the grid.
-        val displayLine = when {
-            record.seriesName != null && record.seasonEpisodeLabel != null ->
-                "${record.seriesName} · ${record.seasonEpisodeLabel}"
-            else -> record.title
-        }
-        Text(
-            displayLine,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = cs.onBackground,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            downloadInfoLine(record, status),
-            style = MaterialTheme.typography.labelSmall,
-            color = cs.onSurfaceVariant,
-            maxLines = 1
-        )
-    }
-
+    LibraryCard(
+        item = item,
+        vm = vm,
+        onClick = { if (status.isComplete) onClick() },
+        showTypeBadge = false,
+        imageUrlOverride = record.posterUrl,
+        onLongClick = { showDeleteDialog = true }
+    )
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -2697,74 +2576,44 @@ private fun groupDownloadsByContainer(
     return seriesEntries + movies
 }
 
-/**
- * Card representing a downloaded series in the My Downloads grid. Renders
- * the series poster with a small badge showing the episode count.
- */
+/** Card representing a downloaded series using the same poster card as streamed series. */
 @Composable
 private fun SeriesDownloadCard(
     group: DownloadEntry.SeriesGroup,
+    vm: AppViewModel,
     onClick: () -> Unit
 ) {
-    val cs = MaterialTheme.colorScheme
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.66f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(cs.surfaceVariant)
-        ) {
-            if (!group.seriesPosterUrl.isNullOrBlank()) {
-                val imageRequest = remember(group.seriesPosterUrl, context) {
-                    coil.request.ImageRequest.Builder(context)
-                        .data(group.seriesPosterUrl)
-                        .size(360, 540)
-                        .crossfade(false)
-                        .build()
-                }
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = group.seriesName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            // Episode count badge top-right. Number is more useful than a
-            // generic "downloaded" check here because a series can have any
-            // number of episodes downloaded (1 of 30, 25 of 30, etc).
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(cs.primary)
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    "${group.records.size} ep",
-                    color = cs.onPrimary,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            group.seriesName,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = cs.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            "Series · Downloaded",
-            style = MaterialTheme.typography.bodySmall,
-            color = cs.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
+    val item = remember(group) { group.toMediaItem() }
+    LibraryCard(
+        item = item,
+        vm = vm,
+        onClick = onClick,
+        showTypeBadge = false,
+        imageUrlOverride = group.seriesPosterUrl
+    )
 }
+
+private fun com.example.jellyfinplayer.data.DownloadsStore.DownloadRecord.toMediaItem(): MediaItem =
+    MediaItem(
+        id = itemId,
+        name = if (seriesName != null && seasonEpisodeLabel != null) {
+            "$seriesName - $seasonEpisodeLabel"
+        } else {
+            title
+        },
+        type = if (seriesName != null) "Episode" else "Movie",
+        productionYear = productionYear,
+        overview = overview,
+        runTimeTicks = runtimeMinutes?.toLong()?.times(600_000_000L),
+        seriesName = seriesName,
+        seriesId = seriesId,
+        episodeNumber = episodeNumber,
+        seasonNumber = seasonNumber
+    )
+
+private fun DownloadEntry.SeriesGroup.toMediaItem(): MediaItem =
+    MediaItem(
+        id = seriesId,
+        name = seriesName,
+        type = "Series"
+    )
