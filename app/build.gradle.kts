@@ -37,7 +37,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.fjora.player"
+        applicationId = "com.fjora.player"
         minSdk = 26
         targetSdk = 35
         versionCode = 12

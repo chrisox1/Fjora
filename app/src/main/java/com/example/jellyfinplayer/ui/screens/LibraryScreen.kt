@@ -1522,6 +1522,7 @@ private fun FeaturedBanner(
     } else {
         item.name
     }
+    val visibleBannerWidth = LocalConfiguration.current.screenWidthDp.dp
     val subtitle = remember(item) { featuredSubtitle(item) }
     val meta = remember(item) { featuredMeta(item) }
 
@@ -1590,7 +1591,7 @@ private fun FeaturedBanner(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
+                .width(visibleBannerWidth)
                 .padding(horizontal = 22.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -1600,6 +1601,7 @@ private fun FeaturedBanner(
                 color = Color.White.copy(alpha = 0.76f),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
+                textAlign = TextAlign.Center,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
@@ -1608,8 +1610,11 @@ private fun FeaturedBanner(
                 color = Color.White,
                 fontWeight = FontWeight.Black,
                 maxLines = 2,
+                textAlign = TextAlign.Center,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 10.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
             )
             if (meta.isNotBlank()) {
                 Text(
@@ -1617,8 +1622,11 @@ private fun FeaturedBanner(
                     style = MaterialTheme.typography.titleSmall,
                     color = Color.White.copy(alpha = 0.88f),
                     maxLines = 1,
+                    textAlign = TextAlign.Center,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
                 )
             }
             Button(
@@ -1666,8 +1674,11 @@ private fun FeaturedBanner(
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.70f),
                     maxLines = 2,
+                    textAlign = TextAlign.Center,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 18.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp)
                 )
             }
         }
