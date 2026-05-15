@@ -141,6 +141,7 @@ fun LibraryScreen(
     val refreshing = vm.homeLoadInFlight.collectAsState().value
     val selectedLibraryId = vm.selectedLibraryId.collectAsState().value
     val libraries = vm.libraries.collectAsState().value
+    val libraryPreviewItems = vm.libraryPreviewItems.collectAsState().value
     val searchQuery = vm.searchQuery.collectAsState().value
     val searchResults = vm.searchResults.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
@@ -665,6 +666,59 @@ fun LibraryScreen(
                     onDownloadsClick = { openDownloadsFromBottomBar() }
                 )
             }
+        },
+        topBar = {
+            if (viewMode != LibraryViewMode.HOME || showingDownloads) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            when {
+                                showingDownloads -> "Downloads"
+                                showingFavorites -> "Favorites"
+                                showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                else -> viewMode.title
+                            },
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { handleTopBack() }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    },
+                    actions = {
+                        if (showingSearchableFullList) {
+                            IconButton(onClick = {
+                                fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
+                                fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
+                                fullListSearchOpen = true
+                            }) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search ${
+                                        when {
+                                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                            else -> viewMode.title
+                                        }
+                                    }"
+                                )
+                            }
+                            IconButton(onClick = { showSortDialog = true }) {
+                                Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent
+                    )
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -921,6 +975,10 @@ fun LibraryScreen(
                                             title = "Favorites",
                                             subtitle = "Movies, shows, and episodes",
                                             kind = ServerLibraryKind.FAVORITES,
+                                            imageUrl = libraryPreviewItems[FAVORITES_TAB_ID]?.let {
+                                                vm.backdropUrl(it, maxWidth = 600)
+                                                    ?: vm.posterUrl(it, maxHeight = 480)
+                                            },
                                             onClick = {
                                                 saveLibraryPosition()
                                                 observedSelectedLibraryId = FAVORITES_TAB_ID
@@ -941,6 +999,10 @@ fun LibraryScreen(
                                                 ServerLibraryKind.TV
                                             } else {
                                                 ServerLibraryKind.MOVIES
+                                            },
+                                            imageUrl = libraryPreviewItems[library.id]?.let {
+                                                vm.backdropUrl(it, maxWidth = 600)
+                                                    ?: vm.posterUrl(it, maxHeight = 480)
                                             },
                                             onClick = {
                                                 saveLibraryPosition()
@@ -1093,33 +1155,6 @@ fun LibraryScreen(
                     onSearchClick = openHomeSearch,
                     onRefreshClick = refreshHome,
                     onSettingsClick = openSettings,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
-            if (!isSearchMode && !fullListSearchOpen &&
-                (viewMode != LibraryViewMode.HOME || showingDownloads)
-            ) {
-                LibraryOverlayTopBar(
-                    title = when {
-                        showingDownloads -> "Downloads"
-                        showingFavorites -> "Favorites"
-                        showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                        else -> viewMode.title
-                    },
-                    onBack = { handleTopBack() },
-                    showActions = showingSearchableFullList,
-                    onSearch = {
-                        fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
-                        fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
-                        fullListSearchOpen = true
-                    },
-                    onSort = { showSortDialog = true },
-                    searchContentDescription = "Search ${
-                        when {
-                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                            else -> viewMode.title
-                        }
-                    }",
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
             }
@@ -1331,7 +1366,7 @@ private fun FeaturedCarousel(
 
     Box(
         modifier = Modifier
-            .requiredWidth(screenWidth)
+            .requiredWidth(screenWidth + 40.dp)
             .offset(x = (-16).dp)
             .pointerInput(items.size) {
                 awaitPointerEventScope {
@@ -1407,52 +1442,6 @@ private fun HomeOverlayControls(
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LibraryOverlayTopBar(
-    title: String,
-    onBack: () -> Unit,
-    showActions: Boolean,
-    onSearch: () -> Unit,
-    onSort: () -> Unit,
-    searchContentDescription: String,
-    modifier: Modifier = Modifier
-) {
-    CenterAlignedTopAppBar(
-        title = {
-            Text(
-                title,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back"
-                )
-            }
-        },
-        actions = {
-            if (showActions) {
-                IconButton(onClick = onSearch) {
-                    Icon(Icons.Default.Search, contentDescription = searchContentDescription)
-                }
-                IconButton(onClick = onSort) {
-                    Icon(Icons.Default.SwapVert, contentDescription = "Sort")
-                }
-            }
-        },
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = Color.Transparent
-        ),
-        modifier = modifier.fillMaxWidth()
-    )
 }
 
 @Composable
@@ -2099,6 +2088,7 @@ private fun ServerLibraryCard(
     title: String,
     subtitle: String,
     kind: ServerLibraryKind,
+    imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -2112,16 +2102,35 @@ private fun ServerLibraryCard(
                 .background(cs.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                when (kind) {
-                    ServerLibraryKind.FAVORITES -> Icons.Default.Star
-                    ServerLibraryKind.TV -> Icons.Default.Tv
-                    ServerLibraryKind.MOVIES -> Icons.Default.Movie
-                },
-                contentDescription = null,
-                tint = cs.onSurfaceVariant,
-                modifier = Modifier.size(56.dp)
-            )
+            if (imageUrl != null) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.55f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.62f)
+                            )
+                        )
+                )
+            } else {
+                Icon(
+                    when (kind) {
+                        ServerLibraryKind.FAVORITES -> Icons.Default.Star
+                        ServerLibraryKind.TV -> Icons.Default.Tv
+                        ServerLibraryKind.MOVIES -> Icons.Default.Movie
+                    },
+                    contentDescription = null,
+                    tint = cs.onSurfaceVariant,
+                    modifier = Modifier.size(56.dp)
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Text(

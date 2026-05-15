@@ -538,55 +538,67 @@ private fun MediaUserActions(
     onFavoriteToggle: () -> Unit,
     onWatchedToggle: (() -> Unit)?
 ) {
-    val cs = MaterialTheme.colorScheme
     Row(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
             .fillMaxWidth()
             .tabletContentWidth()
             .wrapContentWidth(Alignment.CenterHorizontally)
-            .padding(horizontal = 20.dp, vertical = 10.dp)
-            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp)
     ) {
         val favorite = item.userData?.isFavorite == true
-        FilterChip(
-            selected = favorite,
+        SubtleActionIcon(
+            active = favorite,
             enabled = !busy,
             onClick = onFavoriteToggle,
-            leadingIcon = {
-                Icon(
-                    if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
-                    contentDescription = null
-                )
-            },
-            label = { Text(if (favorite) "Favorited" else "Favorite") },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = cs.primary.copy(alpha = 0.18f),
-                selectedLabelColor = cs.primary,
-                selectedLeadingIconColor = cs.primary
-            ),
-            shape = RoundedCornerShape(50)
-        )
+            contentDescription = if (favorite) "Remove favorite" else "Favorite"
+        ) {
+            Icon(
+                if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = null
+            )
+        }
         if (onWatchedToggle != null) {
             val watched = item.userData?.played == true
-            FilterChip(
-                selected = watched,
+            SubtleActionIcon(
+                active = watched,
                 enabled = !busy,
                 onClick = onWatchedToggle,
-                leadingIcon = {
-                    Icon(
-                        if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = null
-                    )
-                },
-                label = { Text(if (watched) "Watched" else "Mark watched") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = cs.primary.copy(alpha = 0.18f),
-                    selectedLabelColor = cs.primary,
-                    selectedLeadingIconColor = cs.primary
-                ),
-                shape = RoundedCornerShape(50)
-            )
+                contentDescription = if (watched) "Mark unwatched" else "Mark watched"
+            ) {
+                Icon(
+                    if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    contentDescription = null
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubtleActionIcon(
+    active: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (active) cs.primary.copy(alpha = 0.14f)
+            else cs.surfaceVariant.copy(alpha = 0.26f),
+        contentColor = if (active) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.82f),
+        modifier = Modifier.size(42.dp)
+    ) {
+        IconButton(
+            enabled = enabled,
+            onClick = onClick,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                content()
+            }
         }
     }
 }

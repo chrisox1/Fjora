@@ -239,6 +239,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _selectedLibraryId = MutableStateFlow<String?>(null)
     val selectedLibraryId: StateFlow<String?> = _selectedLibraryId
 
+    private val _libraryPreviewItems = MutableStateFlow<Map<String, MediaItem>>(emptyMap())
+    val libraryPreviewItems: StateFlow<Map<String, MediaItem>> = _libraryPreviewItems
+
     private val _continueWatching = MutableStateFlow<List<MediaItem>>(emptyList())
     val continueWatching: StateFlow<List<MediaItem>> = _continueWatching
 
@@ -617,7 +620,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // Fetch libraries list. Don't block library-grid loading on
                     // it — if it fails, the user just sees no library tabs.
                     runCatching { repo.loadViews() }
-                        .onSuccess { _libraries.value = it }
+                        .onSuccess {
+                            _libraries.value = it
+                            loadLibraryPreviews(it)
+                        }
                         .onFailure { if (it is AuthExpiredException) handleAuthExpired() }
                 }
                 val serverNameJob = launch {
@@ -660,6 +666,35 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
          */
         const val DOWNLOADS_TAB_SENTINEL = "__downloads__"
         const val FAVORITES_TAB_SENTINEL = "__favorites__"
+    }
+
+    private fun loadLibraryPreviews(libraries: List<MediaItem>) {
+        viewModelScope.launch {
+            val previews = mutableMapOf<String, MediaItem>()
+            runCatching { repo.loadFavorites().shuffled().firstOrNull() }
+                .getOrNull()
+                ?.let { previews[FAVORITES_TAB_SENTINEL] = it }
+            _libraryPreviewItems.value = previews.toMap()
+
+            for (library in libraries) {
+                val preview = runCatching {
+                    repo.loadLibraryItems(
+                        parentId = library.id,
+                        collectionType = library.collectionType,
+                        limit = 12
+                    )
+                        .filter { item ->
+                            item.imageTags["Primary"] != null || item.backdropImageTags.isNotEmpty()
+                        }
+                        .shuffled()
+                        .firstOrNull()
+                }.getOrNull()
+                if (preview != null) {
+                    previews[library.id] = preview
+                    _libraryPreviewItems.value = previews.toMap()
+                }
+            }
+        }
     }
 
     /**

@@ -91,15 +91,33 @@ fun DownloadedSeriesScreen(
 
     Scaffold(
         containerColor = cs.background,
-        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        seriesName,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
+            )
+        }
     ) { padding ->
-        Box(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                item { Spacer(Modifier.height(76.dp)) }
             // Hero — large series poster centered. Simpler than the
             // streaming version since we don't have backdrop art for
             // downloads, just the vertical poster.
@@ -184,27 +202,7 @@ fun DownloadedSeriesScreen(
                     )
                 }
             }
-                item { Spacer(Modifier.height(40.dp)) }
-            }
-            TopAppBar(
-                title = {
-                    Text(
-                        seriesName,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            item { Spacer(Modifier.height(40.dp)) }
         }
     }
 }

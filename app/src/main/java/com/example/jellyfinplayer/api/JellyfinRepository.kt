@@ -250,7 +250,11 @@ class JellyfinRepository {
      * Items inside a specific library. The type filter adapts to the
      * collection: movies-only libraries skip the Series filter and so on.
      */
-    suspend fun loadLibraryItems(parentId: String, collectionType: String?): List<MediaItem> =
+    suspend fun loadLibraryItems(
+        parentId: String,
+        collectionType: String?,
+        limit: Int = 500
+    ): List<MediaItem> =
         mapAuthErrors {
             val a = api ?: error("Call configure() first")
             val types = when (collectionType) {
@@ -263,7 +267,8 @@ class JellyfinRepository {
                 userId = userId,
                 authHeader = authHeader(),
                 parentId = parentId,
-                includeItemTypes = types
+                includeItemTypes = types,
+                limit = limit
             ).items
         }
 
