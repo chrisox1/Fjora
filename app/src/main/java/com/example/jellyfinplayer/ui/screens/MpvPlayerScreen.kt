@@ -116,6 +116,7 @@ fun MpvPlayerScreen(
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
     var resumeAfterDrag by remember { mutableStateOf(false) }
+    var ignorePositionPollUntilMs by remember { mutableLongStateOf(0L) }
     // True once loadfile has been issued. Prevents re-issuing loadfile when
     // the SurfaceView surface is destroyed and recreated (e.g. going home and
     // returning, or the system briefly reclaiming the surface in PiP).
@@ -269,6 +270,7 @@ fun MpvPlayerScreen(
         mpvManualSeeking = false
         mpvHasPlaybackSignal = false
         resumeAfterDrag = false
+        ignorePositionPollUntilMs = 0L
         positionMs = 0L
         durationMs = 0L
         subtitleCues = emptyList()
@@ -362,7 +364,8 @@ fun MpvPlayerScreen(
                 val dur = MPVLib.getPropertyDouble("duration")
                 val pause = MPVLib.getPropertyBoolean("pause")
                 val caching = MPVLib.getPropertyBoolean("paused-for-cache") ?: false
-                if (pos != null) {
+                val acceptPolledPosition = System.currentTimeMillis() >= ignorePositionPollUntilMs
+                if (pos != null && acceptPolledPosition) {
                     positionMs = (pos * 1000.0).toLong()
                     lastPollWallMs = System.currentTimeMillis()
                     if (pos > 0.0) mpvHasPlaybackSignal = true
@@ -558,14 +561,14 @@ fun MpvPlayerScreen(
             }
         }
         pip.activeRewind = {
-            runCatching {
+            subScope.launch {
                 showMpvSeekLoading()
                 seekMpvRelative(-10_000L)
                 resetMpvSubtitleTiming()
             }
         }
         pip.activeForward = {
-            runCatching {
+            subScope.launch {
                 showMpvSeekLoading()
                 seekMpvRelative(30_000L)
                 resetMpvSubtitleTiming()
@@ -896,7 +899,7 @@ fun MpvPlayerScreen(
             ) {
                 IconButton(
                     onClick = {
-                        runCatching {
+                        subScope.launch {
                             showMpvSeekLoading()
                             seekMpvAbsolute(0L)
                             resetMpvSubtitleTiming()
@@ -907,7 +910,7 @@ fun MpvPlayerScreen(
                 }
                 IconButton(
                     onClick = {
-                        runCatching {
+                        subScope.launch {
                             showMpvSeekLoading()
                             seekMpvRelative(-10_000L)
                             resetMpvSubtitleTiming()
@@ -942,7 +945,7 @@ fun MpvPlayerScreen(
                 }
                 IconButton(
                     onClick = {
-                        runCatching {
+                        subScope.launch {
                             showMpvSeekLoading()
                             seekMpvRelative(10_000L)
                             resetMpvSubtitleTiming()
@@ -1019,25 +1022,33 @@ fun MpvPlayerScreen(
                         positionMs = targetMs
                         smoothPositionMs = targetMs
                         lastPollWallMs = System.currentTimeMillis()
-                        runCatching { MPVLib.setPropertyDouble("time-pos", targetMs / 1000.0) }
                     },
                     onValueChangeFinished = {
                         if (durationMs > 0) {
-                            runCatching {
+                            val targetMs = (dragFraction * durationMs).toLong()
+                            val shouldResume = resumeAfterDrag
+                            positionMs = targetMs
+                            smoothPositionMs = targetMs
+                            lastPollWallMs = System.currentTimeMillis()
+                            ignorePositionPollUntilMs = System.currentTimeMillis() + 1_200L
+                            resumeAfterDrag = false
+                            isDragging = false
+                            subScope.launch {
                                 showMpvSeekLoading()
                                 seekMpvAbsolute(
-                                    positionMs = (dragFraction * durationMs).toLong(),
-                                    resumePlayback = resumeAfterDrag
+                                    positionMs = targetMs,
+                                    resumePlayback = shouldResume
                                 )
                                 resetMpvSubtitleTiming()
-                                positionMs = (dragFraction * durationMs).toLong()
-                                smoothPositionMs = positionMs
+                                positionMs = targetMs
+                                smoothPositionMs = targetMs
                                 lastPollWallMs = System.currentTimeMillis()
-                                isPlaying = resumeAfterDrag
+                                isPlaying = shouldResume
                             }
+                        } else {
+                            resumeAfterDrag = false
+                            isDragging = false
                         }
-                        resumeAfterDrag = false
-                        isDragging = false
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = SliderDefaults.colors(
@@ -1147,7 +1158,7 @@ fun MpvPlayerScreen(
             val segment = activeIntroSegment ?: return@AnimatedVisibility
             Button(
                 onClick = {
-                    runCatching {
+                    subScope.launch {
                         showMpvSeekLoading()
                         seekMpvAbsolute(segment.endMs)
                         resetMpvSubtitleTiming()
@@ -1294,21 +1305,20 @@ private fun formatMs(ms: Long): String {
     else "%d:%02d".format(m, s)
 }
 
-private fun seekMpvAbsolute(positionMs: Long, resumePlayback: Boolean? = null) {
+private suspend fun seekMpvAbsolute(positionMs: Long, resumePlayback: Boolean? = null) {
     val targetSec = (positionMs.coerceAtLeast(0L) / 1000.0)
     val wasPaused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: false
     val shouldResume = resumePlayback ?: !wasPaused
-    if (!wasPaused) {
-        runCatching { MPVLib.setPropertyBoolean("pause", true) }
-    }
+    runCatching { MPVLib.setPropertyBoolean("pause", true) }
+    delay(90)
     runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+exact")) }
-    runCatching { MPVLib.setPropertyDouble("time-pos", targetSec) }
+    delay(160)
     if (shouldResume) {
         runCatching { MPVLib.setPropertyBoolean("pause", false) }
     }
 }
 
-private fun seekMpvRelative(deltaMs: Long) {
+private suspend fun seekMpvRelative(deltaMs: Long) {
     val currentSec = runCatching { MPVLib.getPropertyDouble("time-pos") }
         .getOrNull()
         ?: 0.0
