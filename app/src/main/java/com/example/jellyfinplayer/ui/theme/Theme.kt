@@ -29,6 +29,7 @@ private val ErrorRed = Color(0xFFD05050)
 
 private fun accentFor(color: AppThemeColor): Color = when (color) {
     AppThemeColor.FJORA -> Accent
+    AppThemeColor.MONOCHROME -> Color.White
     AppThemeColor.PURPLE -> Color(0xFF7A5AC8)
     AppThemeColor.TEAL -> Color(0xFF3D9A93)
     AppThemeColor.BLUE -> Color(0xFF587DAE)
@@ -38,6 +39,7 @@ private fun accentFor(color: AppThemeColor): Color = when (color) {
 
 private fun primaryContainerFor(color: AppThemeColor): Color = when (color) {
     AppThemeColor.FJORA -> Color(0xFF301400)
+    AppThemeColor.MONOCHROME -> Color(0xFF242424)
     AppThemeColor.PURPLE -> Color(0xFF20173A)
     AppThemeColor.TEAL -> Color(0xFF0B2B2A)
     AppThemeColor.BLUE -> Color(0xFF111F34)
@@ -58,6 +60,12 @@ private fun backgroundPaletteFor(color: AppBackgroundColor): BackgroundPalette =
         surface = Surface,
         surfaceElevated = SurfaceElevated,
         outline = Outline
+    )
+    AppBackgroundColor.TRUE_BLACK -> BackgroundPalette(
+        background = Color.Black,
+        surface = Color.Black,
+        surfaceElevated = Color(0xFF101010),
+        outline = Color(0xFF2A2A2A)
     )
     AppBackgroundColor.CHARCOAL -> BackgroundPalette(
         background = Color(0xFF070809),
@@ -95,23 +103,24 @@ private fun darkColors(
     themeColor: AppThemeColor,
     backgroundColor: AppBackgroundColor
 ) = backgroundPaletteFor(backgroundColor).let { bg ->
+    val monochrome = themeColor == AppThemeColor.MONOCHROME
     darkColorScheme(
         primary = accentFor(themeColor),
-        onPrimary = Color.White,
+        onPrimary = if (monochrome) Color.Black else Color.White,
         primaryContainer = primaryContainerFor(themeColor),
-        onPrimaryContainer = Color(0xFFFFD8C0),
-        secondary = AccentVariant,
-        onSecondary = Color(0xFF18083A),
-        secondaryContainer = Color(0xFF280E55),
-        onSecondaryContainer = Color(0xFFD8CCFF),
+        onPrimaryContainer = if (monochrome) Color.White else Color(0xFFFFD8C0),
+        secondary = if (monochrome) Color.White else AccentVariant,
+        onSecondary = if (monochrome) Color.Black else Color(0xFF18083A),
+        secondaryContainer = if (monochrome) Color(0xFF1A1A1A) else Color(0xFF280E55),
+        onSecondaryContainer = if (monochrome) Color.White else Color(0xFFD8CCFF),
         background = bg.background,
-        onBackground = OnSurface,
+        onBackground = if (monochrome) Color.White else OnSurface,
         surface = bg.surface,
-        onSurface = OnSurface,
+        onSurface = if (monochrome) Color.White else OnSurface,
         surfaceVariant = bg.surfaceElevated,
-        onSurfaceVariant = OnSurfaceMuted,
+        onSurfaceVariant = if (monochrome) Color(0xFFB8B8B8) else OnSurfaceMuted,
         outline = bg.outline,
-        outlineVariant = Color(0xFF1E2138),
+        outlineVariant = if (monochrome) Color(0xFF202020) else Color(0xFF1E2138),
         error = ErrorRed
     )
 }

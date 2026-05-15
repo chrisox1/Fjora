@@ -819,6 +819,7 @@ private fun ThemeColorDialog(
 private fun themeColorSwatch(color: AppThemeColor): androidx.compose.ui.graphics.Color =
     when (color) {
         AppThemeColor.FJORA -> androidx.compose.ui.graphics.Color(0xFFBF5820)
+        AppThemeColor.MONOCHROME -> androidx.compose.ui.graphics.Color.White
         AppThemeColor.PURPLE -> androidx.compose.ui.graphics.Color(0xFF7A5AC8)
         AppThemeColor.TEAL -> androidx.compose.ui.graphics.Color(0xFF3D9A93)
         AppThemeColor.BLUE -> androidx.compose.ui.graphics.Color(0xFF587DAE)
@@ -876,6 +877,7 @@ private fun BackgroundColorDialog(
 private fun backgroundColorSwatch(color: AppBackgroundColor): androidx.compose.ui.graphics.Color =
     when (color) {
         AppBackgroundColor.FJORA -> androidx.compose.ui.graphics.Color(0xFF05060D)
+        AppBackgroundColor.TRUE_BLACK -> androidx.compose.ui.graphics.Color.Black
         AppBackgroundColor.CHARCOAL -> androidx.compose.ui.graphics.Color(0xFF070809)
         AppBackgroundColor.MIDNIGHT -> androidx.compose.ui.graphics.Color(0xFF030812)
         AppBackgroundColor.AUBERGINE -> androidx.compose.ui.graphics.Color(0xFF0C0610)

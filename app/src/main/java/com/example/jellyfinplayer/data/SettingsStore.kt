@@ -250,6 +250,7 @@ enum class HomeHeroSource(val storageValue: String, val label: String) {
 
 enum class AppThemeColor(val storageValue: String, val label: String) {
     FJORA("fjora", "Fjora orange"),
+    MONOCHROME("monochrome", "Black and white"),
     PURPLE("purple", "Amethyst"),
     TEAL("teal", "Nordic teal"),
     BLUE("blue", "Steel blue"),
@@ -264,6 +265,7 @@ enum class AppThemeColor(val storageValue: String, val label: String) {
 
 enum class AppBackgroundColor(val storageValue: String, val label: String) {
     FJORA("fjora", "Fjora night"),
+    TRUE_BLACK("true_black", "True black"),
     CHARCOAL("charcoal", "Charcoal"),
     MIDNIGHT("midnight", "Midnight"),
     AUBERGINE("aubergine", "Aubergine"),

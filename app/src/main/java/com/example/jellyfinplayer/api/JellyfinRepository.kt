@@ -238,12 +238,7 @@ class JellyfinRepository {
      */
     suspend fun loadViews(): List<MediaItem> = mapAuthErrors {
         val a = api ?: error("Call configure() first")
-        a.getViews(userId, authHeader()).items.filter {
-            when (it.collectionType) {
-                "movies", "tvshows", "boxsets", "homevideos", "mixed", null -> true
-                else -> false
-            }
-        }
+        a.getViews(userId, authHeader()).items
     }
 
     /**

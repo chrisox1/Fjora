@@ -69,7 +69,12 @@ import com.example.jellyfinplayer.data.HomeHeroSource
 import com.example.jellyfinplayer.ui.components.DownloadStatus
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
 
-private enum class LibraryViewMode(val title: String) { HOME(""), MOVIES("Movies"), SHOWS("Shows") }
+private enum class LibraryViewMode(val title: String) {
+    HOME(""),
+    LIBRARIES("Libraries"),
+    MOVIES("Movies"),
+    SHOWS("Shows")
+}
 
 private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
@@ -134,6 +139,7 @@ fun LibraryScreen(
     val serverName = vm.serverName.collectAsState().value
     val refreshing = vm.homeLoadInFlight.collectAsState().value
     val selectedLibraryId = vm.selectedLibraryId.collectAsState().value
+    val libraries = vm.libraries.collectAsState().value
     val searchQuery = vm.searchQuery.collectAsState().value
     val searchResults = vm.searchResults.collectAsState().value
     val searchInFlight = vm.searching.collectAsState().value
@@ -166,6 +172,11 @@ fun LibraryScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
     val searchFocusRequester = remember { FocusRequester() }
+    val selectedLibrary = libraries.firstOrNull { it.id == selectedLibraryId }
+    val showingDownloads = selectedLibraryId == DOWNLOADS_TAB_ID
+    val showingLibraryItems = viewMode == LibraryViewMode.LIBRARIES &&
+        selectedLibraryId != null &&
+        selectedLibraryId != DOWNLOADS_TAB_ID
 
     LaunchedEffect(Unit) { if (items.isEmpty()) vm.loadHome() }
 
@@ -198,6 +209,10 @@ fun LibraryScreen(
     }
 
     fun returnToHomeMode() {
+        if (selectedLibraryId != null) {
+            observedSelectedLibraryId = null
+            vm.selectLibrary(null)
+        }
         LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
         LibraryNavigationSnapshot.firstVisibleItemIndex = homeReturnIndex
         LibraryNavigationSnapshot.firstVisibleItemScrollOffset = homeReturnOffset
@@ -224,15 +239,27 @@ fun LibraryScreen(
         returnToHomeMode()
     }
 
+    BackHandler(enabled = !isSearchMode && !fullListSearchOpen && showingDownloads) {
+        returnToHomeMode()
+    }
+
     LaunchedEffect(selectedLibraryId) {
         if (observedSelectedLibraryId != selectedLibraryId) {
-            viewMode = LibraryViewMode.HOME
+            val targetMode = if (
+                selectedLibraryId != null &&
+                selectedLibraryId != DOWNLOADS_TAB_ID
+            ) {
+                LibraryViewMode.LIBRARIES
+            } else {
+                LibraryViewMode.HOME
+            }
+            viewMode = targetMode
             showSortDialog = false
             fullListSearchOpen = false
             fullListSearchQuery = ""
             homeReturnIndex = 0
             homeReturnOffset = 0
-            LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
+            LibraryNavigationSnapshot.viewMode = targetMode
             LibraryNavigationSnapshot.firstVisibleItemIndex = 0
             LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
             LibraryNavigationSnapshot.homeReturnIndex = 0
@@ -254,6 +281,11 @@ fun LibraryScreen(
     }
     val fullListItems = remember(items, viewMode, sortKey, sortAscending) {
         val base = when (viewMode) {
+            LibraryViewMode.LIBRARIES -> if (selectedLibraryId == null) {
+                emptyList()
+            } else {
+                items.filter { it.type == "Movie" || it.type == "Series" }
+            }
             LibraryViewMode.MOVIES -> items.filter { it.type == "Movie" }
             LibraryViewMode.SHOWS -> items.filter { it.type == "Series" }
             LibraryViewMode.HOME -> emptyList()
@@ -474,7 +506,7 @@ fun LibraryScreen(
     fun openLibrariesFromBottomBar() {
         observedSelectedLibraryId = null
         vm.selectLibrary(null)
-        openFullList(LibraryViewMode.MOVIES)
+        openFullList(LibraryViewMode.LIBRARIES)
     }
     fun openDownloadsFromBottomBar() {
         observedSelectedLibraryId = DOWNLOADS_TAB_ID
@@ -573,7 +605,9 @@ fun LibraryScreen(
         // is in cutout-extending mode for any reason), title text could
         // overlap the cutout. safeDrawing includes both, guaranteeing no
         // overlap in any orientation.
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets.safeDrawing.only(
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        ),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (!isSearchMode && !fullListSearchOpen) {
@@ -590,11 +624,15 @@ fun LibraryScreen(
             }
         },
         topBar = {
-            if (viewMode != LibraryViewMode.HOME) {
+            if (viewMode != LibraryViewMode.HOME || showingDownloads) {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            viewMode.title,
+                            when {
+                                showingDownloads -> "Downloads"
+                                showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                else -> viewMode.title
+                            },
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleLarge,
                             maxLines = 1,
@@ -611,15 +649,20 @@ fun LibraryScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
-                            fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
-                            fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
-                            fullListSearchOpen = true
-                        }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search ${viewMode.title}")
-                        }
-                        IconButton(onClick = { showSortDialog = true }) {
-                            Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                        if (!showingDownloads && showingLibraryItems) {
+                            IconButton(onClick = {
+                                fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
+                                fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
+                                fullListSearchOpen = true
+                            }) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = "Search ${selectedLibrary?.name ?: "Library"}"
+                                )
+                            }
+                            IconButton(onClick = { showSortDialog = true }) {
+                                Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -696,6 +739,11 @@ fun LibraryScreen(
                 ) { animatedViewMode ->
                     val animatedFullListItems = remember(items, animatedViewMode, sortKey, sortAscending) {
                         val base = when (animatedViewMode) {
+                            LibraryViewMode.LIBRARIES -> if (selectedLibraryId == null) {
+                                emptyList()
+                            } else {
+                                items.filter { it.type == "Movie" || it.type == "Series" }
+                            }
                             LibraryViewMode.MOVIES -> items.filter { it.type == "Movie" }
                             LibraryViewMode.SHOWS -> items.filter { it.type == "Series" }
                             LibraryViewMode.HOME -> emptyList()
@@ -845,13 +893,49 @@ fun LibraryScreen(
                                         }
                                     }
                                 }
+                            } else if (animatedViewMode == LibraryViewMode.LIBRARIES && selectedLibraryId == null) {
+                                if (libraries.isEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        EmptyBlock(
+                                            "No libraries found",
+                                            "Refresh after adding libraries on your Jellyfin server."
+                                        )
+                                    }
+                                } else {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        Text(
+                                            "Choose a library",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                                        )
+                                    }
+                                    items(libraries, key = { it.id }) { library ->
+                                        ServerLibraryCard(
+                                            library = library,
+                                            onClick = {
+                                                saveLibraryPosition()
+                                                observedSelectedLibraryId = library.id
+                                                vm.selectLibrary(library.id)
+                                                LibraryNavigationSnapshot.viewMode = LibraryViewMode.LIBRARIES
+                                                viewMode = LibraryViewMode.LIBRARIES
+                                            },
+                                            modifier = Modifier.animateItemPlacement()
+                                        )
+                                    }
+                                }
                             } else if (animatedViewMode != LibraryViewMode.HOME) {
                                 if (animatedVisibleFullListItems.isEmpty()) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         if (fullListSearchQuery.isBlank()) {
                                             EmptyBlock(
                                                 "Nothing here yet",
-                                                "Add ${animatedViewMode.title.lowercase()} on your Jellyfin server, then refresh."
+                                                if (showingLibraryItems) {
+                                                    "Add items to ${selectedLibrary?.name ?: "this library"} on your Jellyfin server, then refresh."
+                                                } else {
+                                                    "Add ${animatedViewMode.title.lowercase()} on your Jellyfin server, then refresh."
+                                                }
                                             )
                                         } else {
                                             EmptyBlock(
@@ -1199,7 +1283,7 @@ private fun FeaturedCarousel(
 
     Box(
         modifier = Modifier
-            .width(screenWidth)
+            .requiredWidth(screenWidth)
             .offset(x = (-16).dp)
             .pointerInput(items.size) {
                 awaitPointerEventScope {
@@ -1219,12 +1303,48 @@ private fun FeaturedCarousel(
                 item = item,
                 vm = vm,
                 label = label,
-                refreshing = refreshing,
-                onSearchClick = onSearchClick,
-                onRefreshClick = onRefreshClick,
-                onSettingsClick = onSettingsClick,
                 onClick = { onItemClick(item) }
             )
+        }
+        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(start = 18.dp, end = 18.dp, top = statusTop + 16.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OverlayIconButton(
+                onClick = onSearchClick,
+                enabled = true,
+                contentDescription = "Search"
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+            }
+            Spacer(Modifier.weight(1f))
+            OverlayIconButton(
+                onClick = onRefreshClick,
+                enabled = !refreshing,
+                contentDescription = "Refresh"
+            ) {
+                if (refreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            OverlayIconButton(
+                onClick = onSettingsClick,
+                enabled = true,
+                contentDescription = "Settings"
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null)
+            }
         }
     }
 }
@@ -1234,10 +1354,6 @@ private fun FeaturedBanner(
     item: MediaItem,
     vm: AppViewModel,
     label: String,
-    refreshing: Boolean,
-    onSearchClick: () -> Unit,
-    onRefreshClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1292,8 +1408,9 @@ private fun FeaturedBanner(
                     Brush.verticalGradient(
                         0f to Color.Black.copy(alpha = 0.06f),
                         0.38f to Color.Black.copy(alpha = 0.16f),
-                        0.72f to Color.Black.copy(alpha = 0.76f),
-                        1f to Color.Black.copy(alpha = 0.94f)
+                        0.70f to Color.Black.copy(alpha = 0.72f),
+                        0.90f to cs.background.copy(alpha = 0.78f),
+                        1f to cs.background
                     )
                 )
         )
@@ -1308,45 +1425,6 @@ private fun FeaturedBanner(
                     )
                 )
         )
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OverlayIconButton(
-                onClick = onSearchClick,
-                enabled = true,
-                contentDescription = "Search"
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-            }
-            Spacer(Modifier.weight(1f))
-            OverlayIconButton(
-                onClick = onRefreshClick,
-                enabled = !refreshing,
-                contentDescription = "Refresh"
-            ) {
-                if (refreshing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = Color.White
-                    )
-                } else {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
-                }
-            }
-            Spacer(Modifier.width(8.dp))
-            OverlayIconButton(
-                onClick = onSettingsClick,
-                enabled = true,
-                contentDescription = "Settings"
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = null)
-            }
-        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1385,8 +1463,8 @@ private fun FeaturedBanner(
                 onClick = onClick,
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black
+                    containerColor = cs.primary,
+                    contentColor = cs.onPrimary
                 ),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                 modifier = Modifier.padding(top = 18.dp)
@@ -1902,6 +1980,57 @@ private fun EmptyBlock(title: String, sub: String) {
 }
 
 @Composable
+private fun ServerLibraryCard(
+    library: MediaItem,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(modifier = modifier.clickable { onClick() }) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(cs.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                if (library.collectionType == "tvshows") Icons.Default.Tv else Icons.Default.Movie,
+                contentDescription = null,
+                tint = cs.onSurfaceVariant,
+                modifier = Modifier.size(56.dp)
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            library.name.ifBlank { library.collectionType?.libraryTypeLabel() ?: "Library" },
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = cs.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            library.collectionType?.libraryTypeLabel() ?: "Mixed",
+            style = MaterialTheme.typography.bodySmall,
+            color = cs.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun String.libraryTypeLabel(): String = when (this) {
+    "movies" -> "Movies"
+    "tvshows" -> "TV Shows"
+    "boxsets" -> "Collections"
+    "homevideos" -> "Home Videos"
+    "mixed" -> "Mixed"
+    else -> replaceFirstChar { it.uppercase() }
+}
+
+@Composable
 private fun ErrorBlock(message: String, modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Column(
         modifier = modifier.padding(24.dp),
@@ -1968,7 +2097,7 @@ private fun FjoraBottomNavigation(
             tonalElevation = 0.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(76.dp)
+                .heightIn(min = 88.dp)
         ) {
             NavigationBarItem(
                 selected = selected == BottomDestination.HOME,

@@ -151,7 +151,9 @@ fun EpisodesScreen(
 
     Scaffold(
         containerColor = cs.background,
-        contentWindowInsets = WindowInsets.safeDrawing
+        contentWindowInsets = WindowInsets.safeDrawing.only(
+            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        )
     ) { padding ->
         Box(
             Modifier
@@ -365,9 +367,10 @@ private fun SeriesHero(
     Box(
         Modifier
             .fillMaxWidth()
-            .height(470.dp)
+            .height(440.dp)
             .background(cs.surfaceVariant) // placeholder under the backdrop
     ) {
+        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val backdrop = vm.backdropUrl(series, maxWidth = 1280)
         if (backdrop != null) {
             AsyncImage(
@@ -407,7 +410,7 @@ private fun SeriesHero(
             contentColor = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(start = 16.dp, top = 14.dp)
+                .padding(start = 16.dp, top = statusTop + 14.dp)
                 .size(44.dp)
         ) {
             IconButton(onClick = onBack) {
@@ -432,7 +435,6 @@ private fun SeriesHero(
             val meta = buildList {
                 series.productionYear?.let { add(it.toString()) }
                 series.officialRating?.takeIf { it.isNotBlank() }?.let { add(it) }
-                series.runtimeMinutes?.let { add("${it}m") }
                 series.communityRating?.let { add("Rating ${"%.1f".format(it)}") }
             }
             if (meta.isNotEmpty()) {
