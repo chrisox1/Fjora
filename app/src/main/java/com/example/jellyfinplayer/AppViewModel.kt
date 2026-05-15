@@ -795,6 +795,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun posterUrl(item: MediaItem, maxHeight: Int = 480) = repo.posterUrl(item, maxHeight)
     fun backdropUrl(item: MediaItem, maxWidth: Int = 1280) = repo.backdropUrl(item, maxWidth)
+    fun parentBackdropUrl(item: MediaItem, maxWidth: Int = 1280) =
+        repo.parentBackdropUrl(item, maxWidth)
     fun personImageUrl(person: Person, maxHeight: Int = 240) =
         repo.personImageUrl(person, maxHeight)
     suspend fun loadIntroSkipperSegments(itemId: String) =

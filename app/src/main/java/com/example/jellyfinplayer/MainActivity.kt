@@ -520,7 +520,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 },
                 onPlay = { item ->
                     val settings = vm.settings.value
-                    screen = if (settings.useMpvForAll || settings.directPlayOnly) {
+                    screen = if (
+                        settings.useMpvForAll ||
+                        settings.directPlayOnly ||
+                        (settings.alwaysPlaySubtitles && item.hasEmbeddedImageSubtitle())
+                    ) {
                         Screen.MpvPlayer(item = item, series = s.series, movieDetail = item)
                     } else {
                         Screen.Player(
@@ -573,7 +577,11 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
                 },
                 onPlayNext = { next ->
                     val settings = vm.settings.value
-                    screen = if (settings.useMpvForAll || settings.directPlayOnly) {
+                    screen = if (
+                        settings.useMpvForAll ||
+                        settings.directPlayOnly ||
+                        (settings.alwaysPlaySubtitles && next.hasEmbeddedImageSubtitle())
+                    ) {
                         Screen.MpvPlayer(item = next, series = s.series, movieDetail = next)
                     } else {
                         Screen.Player(
@@ -645,6 +653,17 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
             )
         }
     }
+}
+
+private fun MediaItem.hasEmbeddedImageSubtitle(): Boolean =
+    mediaSources
+        .flatMap { it.mediaStreams }
+        .any { it.type == "Subtitle" && it.isImageSubtitleCodec() }
+
+private fun MediaStream.isImageSubtitleCodec(): Boolean = when (codec?.lowercase()?.trim()) {
+    "pgssub", "pgs", "hdmv_pgs_subtitle", "dvdsub", "dvd_subtitle", "xsub",
+    "dvbsub", "dvb_subtitle", "dvbtxt", "dvb_teletext", "teletext" -> true
+    else -> false
 }
 
 private fun DownloadsStore.DownloadRecord.toLocalMediaItem(): MediaItem {

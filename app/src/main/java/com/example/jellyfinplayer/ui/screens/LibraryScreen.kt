@@ -7,8 +7,6 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -787,15 +785,8 @@ fun LibraryScreen(
                         selectedLibraryId = selectedLibraryId
                     ),
                     transitionSpec = {
-                        val forward = targetState.viewMode.ordinal >= initialState.viewMode.ordinal
-                        val slide = if (forward) 48 else -48
-                        val enter = slideInHorizontally(animationSpec = tween(170)) { slide } +
-                            fadeIn(animationSpec = tween(140))
-                        val exit = slideOutHorizontally(animationSpec = tween(170)) { -slide / 2 } +
-                            fadeOut(animationSpec = tween(120))
-                        (enter togetherWith exit).apply {
-                            targetContentZIndex = if (forward) 1f else 0f
-                        }
+                        fadeIn(animationSpec = tween(180)) togetherWith
+                            fadeOut(animationSpec = tween(140))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -1485,11 +1476,20 @@ private fun FeaturedBanner(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val ownBackdrop = if (item.backdropImageTags.isNotEmpty()) {
+        vm.backdropUrl(item, maxWidth = 1280)
+    } else {
+        null
+    }
+    val backdropArtwork = when (item.type) {
+        "Episode" -> vm.parentBackdropUrl(item, maxWidth = 1280) ?: ownBackdrop
+        else -> ownBackdrop
+    }
     val posterArtwork = when (item.type) {
         "Episode" -> vm.seriesPosterUrl(item, maxHeight = 900)
         else -> vm.posterUrl(item, maxHeight = 900)
     }
-    val artwork = posterArtwork ?: vm.backdropUrl(item, maxWidth = 1280)
+    val artwork = backdropArtwork ?: posterArtwork
     val progress = item.playedFraction ?: 0f
     val remainingMinutes = remainingMinutes(item, progress)
     val title = if (item.type == "Episode" && !item.seriesName.isNullOrBlank()) {
@@ -1510,14 +1510,14 @@ private fun FeaturedBanner(
             .clickable(onClick = onClick)
     ) {
         if (artwork != null) {
-            val imageRequest = remember(artwork, posterArtwork, context) {
+            val imageRequest = remember(artwork, posterArtwork, backdropArtwork, context) {
                 coil.request.ImageRequest.Builder(context)
                     .data(artwork)
                     .apply {
-                        if (posterArtwork != null) {
-                            size(900, 1350)
-                        } else {
+                        if (backdropArtwork != null) {
                             size(1280, 720)
+                        } else {
+                            size(900, 1350)
                         }
                     }
                     .crossfade(false)
@@ -1862,20 +1862,29 @@ private fun LatestMediaRow(
                 Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Show all $title")
             }
         }
-        LazyRow(
-            state = state,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 2.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(items, key = { it.id }) { item ->
-                LibraryCard(
-                    item = item,
-                    vm = vm,
-                    onClick = { onItemClick(item) },
-                    showTypeBadge = false,
-                    modifier = Modifier.width(150.dp)
-                )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val edgePadding = 16.dp
+            LazyRow(
+                state = state,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(
+                    start = edgePadding,
+                    end = edgePadding,
+                    bottom = 2.dp
+                ),
+                modifier = Modifier
+                    .requiredWidth(maxWidth + edgePadding * 2)
+                    .offset(x = -edgePadding)
+            ) {
+                items(items, key = { it.id }) { item ->
+                    LibraryCard(
+                        item = item,
+                        vm = vm,
+                        onClick = { onItemClick(item) },
+                        showTypeBadge = false,
+                        modifier = Modifier.width(150.dp)
+                    )
+                }
             }
         }
     }
@@ -1891,14 +1900,24 @@ private fun WideRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    LazyRow(
-        state = state,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        items(items, key = { it.id }) { item ->
-            WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val edgePadding = 16.dp
+        LazyRow(
+            state = state,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(
+                start = edgePadding,
+                end = edgePadding,
+                top = 4.dp,
+                bottom = 4.dp
+            ),
+            modifier = Modifier
+                .requiredWidth(maxWidth + edgePadding * 2)
+                .offset(x = -edgePadding)
+        ) {
+            items(items, key = { it.id }) { item ->
+                WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
+            }
         }
     }
 }

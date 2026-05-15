@@ -78,6 +78,8 @@ data class MediaItem(
     @SerialName("Genres") val genres: List<String> = emptyList(),
     @SerialName("ImageTags") val imageTags: Map<String, String> = emptyMap(),
     @SerialName("BackdropImageTags") val backdropImageTags: List<String> = emptyList(),
+    @SerialName("ParentBackdropImageTags") val parentBackdropImageTags: List<String> = emptyList(),
+    @SerialName("ParentBackdropItemId") val parentBackdropItemId: String? = null,
     @SerialName("MediaSources") val mediaSources: List<MediaSource> = emptyList(),
     @SerialName("UserData") val userData: UserItemData? = null,
     /**
@@ -170,6 +172,7 @@ data class MediaStream(
     @SerialName("Title") val title: String? = null,
     @SerialName("Height") val height: Int? = null,
     @SerialName("Width") val width: Int? = null,
+    @SerialName("IsInterlaced") val isInterlaced: Boolean = false,
     @SerialName("VideoRange") val videoRange: String? = null,
     @SerialName("VideoRangeType") val videoRangeType: String? = null,
     @SerialName("ColorTransfer") val colorTransfer: String? = null,

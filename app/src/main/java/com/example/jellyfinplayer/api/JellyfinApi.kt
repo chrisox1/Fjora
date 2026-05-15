@@ -9,6 +9,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import kotlinx.serialization.json.JsonObject
 
+private const val ITEM_FIELDS =
+    "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate,ParentBackdropImageTags"
+
 interface JellyfinApi {
 
     @POST("Users/AuthenticateByName")
@@ -54,7 +57,7 @@ interface JellyfinApi {
         @Query("Recursive") recursive: Boolean = true,
         @Query("SortBy") sortBy: String = "SortName",
         @Query("SortOrder") sortOrder: String = "Ascending",
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 200
     ): ItemsResponse
 
@@ -67,7 +70,7 @@ interface JellyfinApi {
         @Query("Recursive") recursive: Boolean = true,
         @Query("SortBy") sortBy: String = "SortName",
         @Query("SortOrder") sortOrder: String = "Ascending",
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 500
     ): ItemsResponse
 
@@ -96,7 +99,7 @@ interface JellyfinApi {
         @Query("Recursive") recursive: Boolean = true,
         @Query("SortBy") sortBy: String = "SortName",
         @Query("SortOrder") sortOrder: String = "Ascending",
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 500
     ): ItemsResponse
 
@@ -109,7 +112,7 @@ interface JellyfinApi {
         @Query("Recursive") recursive: Boolean = true,
         @Query("SortBy") sortBy: String = "SortName",
         @Query("SortOrder") sortOrder: String = "Ascending",
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 200
     ): ItemsResponse
 
@@ -119,7 +122,7 @@ interface JellyfinApi {
         @Path("seriesId") seriesId: String,
         @Header("Authorization") authHeader: String,
         @Query("UserId") userId: String,
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate"
+        @Query("Fields") fields: String = ITEM_FIELDS
     ): ItemsResponse
 
     /** Full item details, including MediaSources / streams (subtitles, qualities). */
@@ -181,7 +184,7 @@ interface JellyfinApi {
         @Query("SearchTerm") query: String,
         @Query("IncludeItemTypes") includeItemTypes: String = "Movie,Series",
         @Query("Recursive") recursive: Boolean = true,
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 50
     ): ItemsResponse
 
@@ -191,7 +194,7 @@ interface JellyfinApi {
         @Header("Authorization") authHeader: String,
         @Query("UserId") userId: String,
         @Query("MediaTypes") mediaTypes: String = "Video",
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 20
     ): ItemsResponse
 
@@ -200,7 +203,7 @@ interface JellyfinApi {
     suspend fun getNextUp(
         @Header("Authorization") authHeader: String,
         @Query("UserId") userId: String,
-        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Fields") fields: String = ITEM_FIELDS,
         @Query("Limit") limit: Int = 20
     ): ItemsResponse
 

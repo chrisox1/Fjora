@@ -272,6 +272,7 @@ fun MpvPlayerScreen(
         resolved = null
         if (localFilePath != null) {
             details = item
+            durationMs = item.durationMsFallback() ?: 0L
             selectedSubtitleIndex = pickPreferredMpvSubtitle(
                 item = item,
                 alwaysPlaySubtitles = settings.alwaysPlaySubtitles,
@@ -297,6 +298,7 @@ fun MpvPlayerScreen(
                 loaded
             }
             details = effectiveItem
+            durationMs = effectiveItem.durationMsFallback() ?: 0L
             selectedSubtitleIndex = pickPreferredMpvSubtitle(
                 item = effectiveItem,
                 alwaysPlaySubtitles = settings.alwaysPlaySubtitles,
@@ -360,7 +362,11 @@ fun MpvPlayerScreen(
                     positionMs = (pos * 1000.0).toLong()
                     lastPollWallMs = System.currentTimeMillis()
                 }
-                if (dur != null) durationMs = (dur * 1000.0).toLong()
+                if (dur != null && dur > 0.0) {
+                    durationMs = (dur * 1000.0).toLong()
+                } else if (durationMs <= 0L) {
+                    durationMs = details?.durationMsFallback() ?: item.durationMsFallback() ?: 0L
+                }
                 if (pause != null) isPlaying = !pause
                 mpvBuffering = caching
                 if (subtitleCues.isNotEmpty()) {
@@ -465,7 +471,7 @@ fun MpvPlayerScreen(
                 smoothPositionMs = resumeMs
                 delay(1_500)
                 runCatching {
-                    MPVLib.command(arrayOf("seek", (resumeMs / 1000.0).toString(), "absolute"))
+                    seekMpvAbsolute(resumeMs)
                     positionMs = resumeMs
                     lastPollWallMs = System.currentTimeMillis()
                 }
@@ -547,14 +553,14 @@ fun MpvPlayerScreen(
         pip.activeRewind = {
             runCatching {
                 showMpvSeekLoading()
-                MPVLib.command(arrayOf("seek", "-10", "relative"))
+                seekMpvRelative(-10_000L)
                 resetMpvSubtitleTiming()
             }
         }
         pip.activeForward = {
             runCatching {
                 showMpvSeekLoading()
-                MPVLib.command(arrayOf("seek", "30", "relative"))
+                seekMpvRelative(30_000L)
                 resetMpvSubtitleTiming()
             }
         }
@@ -688,9 +694,12 @@ fun MpvPlayerScreen(
                         MPVLib.create(context.applicationContext)
                         MPVLib.setOptionString("vo", "gpu")
                         MPVLib.setOptionString("gpu-context", "android")
-                        // mediacodec-copy: hardware decode + copy frame to GPU
-                        // buffer so vo=gpu can composite it.
-                        MPVLib.setOptionString("hwdec", "mediacodec-copy")
+                        // Let mpv fall back to software decode when Android's
+                        // MediaCodec path cannot handle the source, especially
+                        // interlaced H.264/TV recordings.
+                        MPVLib.setOptionString("hwdec", "auto-safe")
+                        MPVLib.setOptionString("vd-lavc-software-fallback", "1")
+                        MPVLib.setOptionString("deinterlace", "yes")
                         MPVLib.setOptionString("cache", "yes")
                         MPVLib.setOptionString("demuxer-max-bytes", "64MiB")
                         MPVLib.setOptionString("demuxer-max-back-bytes", "16MiB")
@@ -867,8 +876,7 @@ fun MpvPlayerScreen(
         // ── Center transport controls ─────────────────────────────────────────
         // Hidden during the loading phase (before first frame ready or while
         // buffering) so the user only sees the spinner — no stale Pause icon.
-        val mpvLoading = !mpvFirstFrameReady || mpvBuffering ||
-            (fileLoaded && durationMs == 0L)
+        val mpvLoading = !mpvFirstFrameReady || mpvBuffering
         AnimatedVisibility(
             visible = chromeVisible && !controlsLocked && !mpvLoading && !inPip,
             enter = fadeIn(),
@@ -883,7 +891,7 @@ fun MpvPlayerScreen(
                     onClick = {
                         runCatching {
                             showMpvSeekLoading()
-                            MPVLib.command(arrayOf("seek", "0", "absolute"))
+                            seekMpvAbsolute(0L)
                             resetMpvSubtitleTiming()
                         }
                     }
@@ -894,7 +902,7 @@ fun MpvPlayerScreen(
                     onClick = {
                         runCatching {
                             showMpvSeekLoading()
-                            MPVLib.command(arrayOf("seek", "-10", "relative"))
+                            seekMpvRelative(-10_000L)
                             resetMpvSubtitleTiming()
                         }
                     }
@@ -929,7 +937,7 @@ fun MpvPlayerScreen(
                     onClick = {
                         runCatching {
                             showMpvSeekLoading()
-                            MPVLib.command(arrayOf("seek", "10", "relative"))
+                            seekMpvRelative(10_000L)
                             resetMpvSubtitleTiming()
                         }
                     }
@@ -998,10 +1006,9 @@ fun MpvPlayerScreen(
                     },
                     onValueChangeFinished = {
                         if (durationMs > 0) {
-                            val targetSec = (dragFraction * durationMs / 1000.0)
                             runCatching {
                                 showMpvSeekLoading()
-                                MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute"))
+                                seekMpvAbsolute((dragFraction * durationMs).toLong())
                                 resetMpvSubtitleTiming()
                                 positionMs = (dragFraction * durationMs).toLong()
                                 smoothPositionMs = positionMs
@@ -1024,7 +1031,7 @@ fun MpvPlayerScreen(
         // network cache (seeking stall) or when the file is loading
         // (fileLoaded=true but duration not yet reported).
         val showMpvSpinner = mpvBuffering || mpvManualSeeking ||
-            (fileLoaded && durationMs == 0L && sourceUrl != null)
+            (fileLoaded && durationMs == 0L && sourceUrl != null && !mpvFirstFrameReady)
         if (showMpvSpinner) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),
@@ -1120,9 +1127,7 @@ fun MpvPlayerScreen(
                 onClick = {
                     runCatching {
                         showMpvSeekLoading()
-                        MPVLib.command(
-                            arrayOf("seek", (segment.endMs / 1000.0).toString(), "absolute")
-                        )
+                        seekMpvAbsolute(segment.endMs)
                         resetMpvSubtitleTiming()
                     }
                 },
@@ -1267,8 +1272,24 @@ private fun formatMs(ms: Long): String {
     else "%d:%02d".format(m, s)
 }
 
+private fun seekMpvAbsolute(positionMs: Long) {
+    val targetSec = (positionMs.coerceAtLeast(0L) / 1000.0)
+    runCatching { MPVLib.setPropertyDouble("time-pos", targetSec) }
+    runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+exact")) }
+}
+
+private fun seekMpvRelative(deltaMs: Long) {
+    val currentSec = runCatching { MPVLib.getPropertyDouble("time-pos") }
+        .getOrNull()
+        ?: 0.0
+    seekMpvAbsolute(((currentSec * 1000.0).toLong() + deltaMs).coerceAtLeast(0L))
+}
+
 private fun MediaItem.forceStartFromBeginning(): Boolean =
     userData?.playbackPositionTicks == 0L && userData.playedPercentage == 0.0
+
+private fun MediaItem.durationMsFallback(): Long? =
+    runTimeTicks?.takeIf { it > 0L }?.let { it / 10_000L }
 
 private fun applyMpvFillMode(mode: MpvFillMode) {
     when (mode) {
@@ -1303,7 +1324,7 @@ private suspend fun refreshMpvVideoOutput() {
         if (attempt > 0) delay(40)
         val pos = runCatching { MPVLib.getPropertyDouble("time-pos") }.getOrNull()
         if (pos != null && pos >= 0.0) {
-            runCatching { MPVLib.command(arrayOf("seek", pos.toString(), "absolute+exact")) }
+            seekMpvAbsolute((pos * 1000.0).toLong())
             return
         }
     }
@@ -1349,7 +1370,8 @@ private fun formatMpvSubtitleLabel(stream: MediaStream, trackNumber: Int): Strin
 }
 
 private fun MediaStream.isImageBasedSubtitle(): Boolean = when (codec?.lowercase()?.trim()) {
-    "pgssub", "pgs", "hdmv_pgs_subtitle", "dvdsub", "dvd_subtitle", "xsub", "dvbsub" -> true
+    "pgssub", "pgs", "hdmv_pgs_subtitle", "dvdsub", "dvd_subtitle", "xsub",
+    "dvbsub", "dvb_subtitle", "dvbtxt", "dvb_teletext", "teletext" -> true
     else -> false
 }
 

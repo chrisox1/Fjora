@@ -436,6 +436,13 @@ class JellyfinRepository {
         }
     }
 
+    /** Backdrop from a parent series/season, useful for episode hero art. */
+    fun parentBackdropUrl(item: MediaItem, maxWidth: Int = 1280): String? {
+        val parentId = item.parentBackdropItemId ?: item.seriesId ?: return null
+        val tag = item.parentBackdropImageTags.firstOrNull() ?: return null
+        return "$serverUrl/Items/$parentId/Images/Backdrop/0?maxWidth=$maxWidth&tag=$tag&quality=90"
+    }
+
     /**
      * Build a headshot URL for a cast / crew person. Returns null when the
      * server has no image on file (Coil falls back to its error/placeholder
@@ -776,7 +783,10 @@ class JellyfinRepository {
                 // is the only way to display them. ExoPlayer can't render
                 // these as a separate track.
                 SubtitleProfile(format = "pgssub", method = "Encode"),
-                SubtitleProfile(format = "dvdsub", method = "Encode")
+                SubtitleProfile(format = "dvdsub", method = "Encode"),
+                SubtitleProfile(format = "dvbsub", method = "Encode"),
+                SubtitleProfile(format = "dvbtxt", method = "Encode"),
+                SubtitleProfile(format = "dvb_teletext", method = "Encode")
             )
         )
     }
@@ -825,7 +835,10 @@ class JellyfinRepository {
                 SubtitleProfile(format = "ssa", method = "External"),
                 SubtitleProfile(format = "webvtt", method = "External"),
                 SubtitleProfile(format = "pgssub", method = "Embed"),
-                SubtitleProfile(format = "dvdsub", method = "Embed")
+                SubtitleProfile(format = "dvdsub", method = "Embed"),
+                SubtitleProfile(format = "dvbsub", method = "Embed"),
+                SubtitleProfile(format = "dvbtxt", method = "Embed"),
+                SubtitleProfile(format = "dvb_teletext", method = "Embed")
             )
         )
     }
