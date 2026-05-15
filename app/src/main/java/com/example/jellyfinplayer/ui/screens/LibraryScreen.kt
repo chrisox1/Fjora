@@ -661,61 +661,8 @@ fun LibraryScreen(
                     },
                     onHomeClick = { openHomeFromBottomBar() },
                     onLibrariesClick = { openLibrariesFromBottomBar() },
+                    onSearchClick = { openHomeSearch() },
                     onDownloadsClick = { openDownloadsFromBottomBar() }
-                )
-            }
-        },
-        topBar = {
-            if (viewMode != LibraryViewMode.HOME || showingDownloads) {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            when {
-                                showingDownloads -> "Downloads"
-                                showingFavorites -> "Favorites"
-                                showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                                else -> viewMode.title
-                            },
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { handleTopBack() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
-                            )
-                        }
-                    },
-                    actions = {
-                        if (showingSearchableFullList) {
-                            IconButton(onClick = {
-                                fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
-                                fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
-                                fullListSearchOpen = true
-                            }) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = "Search ${
-                                        when {
-                                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
-                                            else -> viewMode.title
-                                        }
-                                    }"
-                                )
-                            }
-                            IconButton(onClick = { showSortDialog = true }) {
-                                Icon(Icons.Default.SwapVert, contentDescription = "Sort")
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent
-                    )
                 )
             }
         }
@@ -1149,6 +1096,33 @@ fun LibraryScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
             }
+            if (!isSearchMode && !fullListSearchOpen &&
+                (viewMode != LibraryViewMode.HOME || showingDownloads)
+            ) {
+                LibraryOverlayTopBar(
+                    title = when {
+                        showingDownloads -> "Downloads"
+                        showingFavorites -> "Favorites"
+                        showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                        else -> viewMode.title
+                    },
+                    onBack = { handleTopBack() },
+                    showActions = showingSearchableFullList,
+                    onSearch = {
+                        fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
+                        fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
+                        fullListSearchOpen = true
+                    },
+                    onSort = { showSortDialog = true },
+                    searchContentDescription = "Search ${
+                        when {
+                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                            else -> viewMode.title
+                        }
+                    }",
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         }
     }
     }
@@ -1433,6 +1407,52 @@ private fun HomeOverlayControls(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LibraryOverlayTopBar(
+    title: String,
+    onBack: () -> Unit,
+    showActions: Boolean,
+    onSearch: () -> Unit,
+    onSort: () -> Unit,
+    searchContentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    CenterAlignedTopAppBar(
+        title = {
+            Text(
+                title,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back"
+                )
+            }
+        },
+        actions = {
+            if (showActions) {
+                IconButton(onClick = onSearch) {
+                    Icon(Icons.Default.Search, contentDescription = searchContentDescription)
+                }
+                IconButton(onClick = onSort) {
+                    Icon(Icons.Default.SwapVert, contentDescription = "Sort")
+                }
+            }
+        },
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = Color.Transparent
+        ),
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -2187,6 +2207,7 @@ private fun FjoraBottomNavigation(
     selected: BottomDestination,
     onHomeClick: () -> Unit,
     onLibrariesClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onDownloadsClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -2214,6 +2235,13 @@ private fun FjoraBottomNavigation(
                 onClick = onLibrariesClick,
                 icon = { Icon(Icons.Default.Movie, contentDescription = null) },
                 label = { Text("Libraries") },
+                colors = fjoraBottomNavigationItemColors()
+            )
+            NavigationBarItem(
+                selected = false,
+                onClick = onSearchClick,
+                icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                label = { Text("Search") },
                 colors = fjoraBottomNavigationItemColors()
             )
             NavigationBarItem(
