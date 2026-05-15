@@ -544,10 +544,10 @@ fun MpvPlayerScreen(
                 .getOrDefault(false)
         }
         pip.activeTogglePlayPause = {
-            subScope.launch {
+            runCatching {
                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
-                if (paused) refreshMpvVideoOutput()
-                runCatching { MPVLib.setPropertyBoolean("pause", !paused) }
+                MPVLib.setPropertyBoolean("pause", !paused)
+                isPlaying = paused
             }
         }
         pip.activeRewind = {
@@ -918,10 +918,10 @@ fun MpvPlayerScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) {
-                            subScope.launch {
+                            runCatching {
                                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
-                                if (paused) refreshMpvVideoOutput()
-                                runCatching { MPVLib.setPropertyBoolean("pause", !paused) }
+                                MPVLib.setPropertyBoolean("pause", !paused)
+                                isPlaying = paused
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -1274,8 +1274,8 @@ private fun formatMs(ms: Long): String {
 
 private fun seekMpvAbsolute(positionMs: Long) {
     val targetSec = (positionMs.coerceAtLeast(0L) / 1000.0)
+    runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+keyframes")) }
     runCatching { MPVLib.setPropertyDouble("time-pos", targetSec) }
-    runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+exact")) }
 }
 
 private fun seekMpvRelative(deltaMs: Long) {

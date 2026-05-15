@@ -466,24 +466,24 @@ fun LibraryScreen(
     // remount, the new states initialize from the snapshot — restoring the
     // user to the exact card they last tapped.
     val continueWatchingRowState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.continueWatching.first,
-        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.continueWatching.second
+        initialFirstVisibleItemIndex = 0,
+        initialFirstVisibleItemScrollOffset = 0
     )
     val nextUpRowState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.nextUp.first,
-        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.nextUp.second
+        initialFirstVisibleItemIndex = 0,
+        initialFirstVisibleItemScrollOffset = 0
     )
     val homeRowState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.homeRow.first,
-        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.homeRow.second
+        initialFirstVisibleItemIndex = 0,
+        initialFirstVisibleItemScrollOffset = 0
     )
     val latestMoviesState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.latestMovies.first,
-        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.latestMovies.second
+        initialFirstVisibleItemIndex = 0,
+        initialFirstVisibleItemScrollOffset = 0
     )
     val latestShowsState = rememberLazyListState(
-        initialFirstVisibleItemIndex = LatestRowsScrollSnapshot.latestShows.first,
-        initialFirstVisibleItemScrollOffset = LatestRowsScrollSnapshot.latestShows.second
+        initialFirstVisibleItemIndex = 0,
+        initialFirstVisibleItemScrollOffset = 0
     )
     LaunchedEffect(continueWatchingRowState) {
         snapshotFlow {
@@ -785,8 +785,8 @@ fun LibraryScreen(
                         selectedLibraryId = selectedLibraryId
                     ),
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(180)) togetherWith
-                            fadeOut(animationSpec = tween(140))
+                        fadeIn(animationSpec = tween(240)) togetherWith
+                            fadeOut(animationSpec = tween(160))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -1844,6 +1844,9 @@ private fun LatestMediaRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
+    LaunchedEffect(items.map { it.id }) {
+        state.scrollToItem(0, 0)
+    }
     Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier
@@ -1864,18 +1867,19 @@ private fun LatestMediaRow(
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val edgePadding = 16.dp
+            val itemSpacing = 14.dp
+            val edgeSpacer = edgePadding - itemSpacing
             LazyRow(
                 state = state,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(
-                    start = edgePadding,
-                    end = edgePadding,
-                    bottom = 2.dp
-                ),
+                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+                contentPadding = PaddingValues(bottom = 2.dp),
                 modifier = Modifier
                     .requiredWidth(maxWidth + edgePadding * 2)
                     .offset(x = -edgePadding)
             ) {
+                item(key = "${title}_start_padding") {
+                    Spacer(Modifier.width(edgeSpacer))
+                }
                 items(items, key = { it.id }) { item ->
                     LibraryCard(
                         item = item,
@@ -1884,6 +1888,9 @@ private fun LatestMediaRow(
                         showTypeBadge = false,
                         modifier = Modifier.width(150.dp)
                     )
+                }
+                item(key = "${title}_end_padding") {
+                    Spacer(Modifier.width(edgeSpacer))
                 }
             }
         }
@@ -1900,23 +1907,29 @@ private fun WideRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
+    LaunchedEffect(items.map { it.id }) {
+        state.scrollToItem(0, 0)
+    }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val edgePadding = 16.dp
+        val itemSpacing = 12.dp
+        val edgeSpacer = edgePadding - itemSpacing
         LazyRow(
             state = state,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(
-                start = edgePadding,
-                end = edgePadding,
-                top = 4.dp,
-                bottom = 4.dp
-            ),
+            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
             modifier = Modifier
                 .requiredWidth(maxWidth + edgePadding * 2)
                 .offset(x = -edgePadding)
         ) {
+            item(key = "wide_start_padding_${items.firstOrNull()?.id.orEmpty()}") {
+                Spacer(Modifier.width(edgeSpacer))
+            }
             items(items, key = { it.id }) { item ->
                 WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
+            }
+            item(key = "wide_end_padding_${items.lastOrNull()?.id.orEmpty()}") {
+                Spacer(Modifier.width(edgeSpacer))
             }
         }
     }
