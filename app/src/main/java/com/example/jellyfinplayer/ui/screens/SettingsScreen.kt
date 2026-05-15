@@ -224,6 +224,12 @@ fun SettingsScreen(
                 valueRange = 0.03f..0.35f,
                 onValueChange = { vm.setSubtitlePositionFraction(it) }
             )
+            Text(
+                "Only works with the MPV player.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
             ToggleRow(
                 label = "Subtitle background",
                 description = "Add a dark backing behind subtitle text for bright scenes.",

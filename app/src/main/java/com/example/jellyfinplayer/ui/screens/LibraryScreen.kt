@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.*
@@ -174,9 +175,16 @@ fun LibraryScreen(
     val searchFocusRequester = remember { FocusRequester() }
     val selectedLibrary = libraries.firstOrNull { it.id == selectedLibraryId }
     val showingDownloads = selectedLibraryId == DOWNLOADS_TAB_ID
+    val showingFavorites = selectedLibraryId == FAVORITES_TAB_ID
     val showingLibraryItems = viewMode == LibraryViewMode.LIBRARIES &&
         selectedLibraryId != null &&
         selectedLibraryId != DOWNLOADS_TAB_ID
+    val showingSearchableFullList = !showingDownloads &&
+        (
+            showingLibraryItems ||
+                viewMode == LibraryViewMode.MOVIES ||
+                viewMode == LibraryViewMode.SHOWS
+            )
 
     LaunchedEffect(Unit) { if (items.isEmpty()) vm.loadHome() }
 
@@ -221,6 +229,27 @@ fun LibraryScreen(
         viewMode = LibraryViewMode.HOME
     }
 
+    fun returnToLibraryPicker() {
+        observedSelectedLibraryId = null
+        vm.selectLibrary(null)
+        LibraryNavigationSnapshot.viewMode = LibraryViewMode.LIBRARIES
+        LibraryNavigationSnapshot.firstVisibleItemIndex = 0
+        LibraryNavigationSnapshot.firstVisibleItemScrollOffset = 0
+        viewMode = LibraryViewMode.LIBRARIES
+        showSortDialog = false
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+    }
+
+    fun handleTopBack() {
+        when {
+            showingDownloads -> returnToHomeMode()
+            showingLibraryItems -> returnToLibraryPicker()
+            viewMode != LibraryViewMode.HOME -> returnToHomeMode()
+            else -> returnToHomeMode()
+        }
+    }
+
     BackHandler(enabled = isSearchMode) {
         vm.clearSearch()
         searchOpen = false
@@ -236,11 +265,11 @@ fun LibraryScreen(
     }
 
     BackHandler(enabled = !isSearchMode && !fullListSearchOpen && viewMode != LibraryViewMode.HOME) {
-        returnToHomeMode()
+        handleTopBack()
     }
 
     BackHandler(enabled = !isSearchMode && !fullListSearchOpen && showingDownloads) {
-        returnToHomeMode()
+        handleTopBack()
     }
 
     LaunchedEffect(selectedLibraryId) {
@@ -279,10 +308,12 @@ fun LibraryScreen(
             .filter { it.type == "Series" }
             .sortedByDescending { it.latestSortValue() }
     }
-    val fullListItems = remember(items, viewMode, sortKey, sortAscending) {
+    val fullListItems = remember(items, viewMode, selectedLibraryId, sortKey, sortAscending) {
         val base = when (viewMode) {
             LibraryViewMode.LIBRARIES -> if (selectedLibraryId == null) {
                 emptyList()
+            } else if (selectedLibraryId == FAVORITES_TAB_ID) {
+                items.filter { it.type == "Movie" || it.type == "Series" || it.type == "Episode" }
             } else {
                 items.filter { it.type == "Movie" || it.type == "Series" }
             }
@@ -596,6 +627,19 @@ fun LibraryScreen(
         // succeeded — orphaned records are worse than orphaned files.
         vm.removeDownload(rec.downloadId)
     }
+    val openHomeSearch = {
+        searchReturnIndex = activeGridState.firstVisibleItemIndex
+        searchReturnOffset = activeGridState.firstVisibleItemScrollOffset
+        searchOpen = true
+    }
+    val refreshHome = {
+        refreshRequested = true
+        vm.loadHome(force = true)
+    }
+    val openSettings = {
+        saveLibraryPosition()
+        onSettingsClick()
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -605,9 +649,7 @@ fun LibraryScreen(
         // is in cutout-extending mode for any reason), title text could
         // overlap the cutout. safeDrawing includes both, guaranteeing no
         // overlap in any orientation.
-        contentWindowInsets = WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
-        ),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (!isSearchMode && !fullListSearchOpen) {
@@ -630,6 +672,7 @@ fun LibraryScreen(
                         Text(
                             when {
                                 showingDownloads -> "Downloads"
+                                showingFavorites -> "Favorites"
                                 showingLibraryItems -> selectedLibrary?.name ?: "Library"
                                 else -> viewMode.title
                             },
@@ -641,7 +684,7 @@ fun LibraryScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = { returnToHomeMode() }) {
+                        IconButton(onClick = { handleTopBack() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back"
@@ -649,7 +692,7 @@ fun LibraryScreen(
                         }
                     },
                     actions = {
-                        if (!showingDownloads && showingLibraryItems) {
+                        if (showingSearchableFullList) {
                             IconButton(onClick = {
                                 fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
                                 fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
@@ -657,7 +700,12 @@ fun LibraryScreen(
                             }) {
                                 Icon(
                                     Icons.Default.Search,
-                                    contentDescription = "Search ${selectedLibrary?.name ?: "Library"}"
+                                    contentDescription = "Search ${
+                                        when {
+                                            showingLibraryItems -> selectedLibrary?.name ?: "Library"
+                                            else -> viewMode.title
+                                        }
+                                    }"
                                 )
                             }
                             IconButton(onClick = { showSortDialog = true }) {
@@ -737,10 +785,20 @@ fun LibraryScreen(
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
                 ) { animatedViewMode ->
-                    val animatedFullListItems = remember(items, animatedViewMode, sortKey, sortAscending) {
+                    val animatedFullListItems = remember(
+                        items,
+                        animatedViewMode,
+                        selectedLibraryId,
+                        sortKey,
+                        sortAscending
+                    ) {
                         val base = when (animatedViewMode) {
                             LibraryViewMode.LIBRARIES -> if (selectedLibraryId == null) {
                                 emptyList()
+                            } else if (selectedLibraryId == FAVORITES_TAB_ID) {
+                                items.filter {
+                                    it.type == "Movie" || it.type == "Series" || it.type == "Episode"
+                                }
                             } else {
                                 items.filter { it.type == "Movie" || it.type == "Series" }
                             }
@@ -911,9 +969,32 @@ fun LibraryScreen(
                                             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
                                         )
                                     }
+                                    item(key = FAVORITES_TAB_ID) {
+                                        ServerLibraryCard(
+                                            title = "Favorites",
+                                            subtitle = "Movies, shows, and episodes",
+                                            kind = ServerLibraryKind.FAVORITES,
+                                            onClick = {
+                                                saveLibraryPosition()
+                                                observedSelectedLibraryId = FAVORITES_TAB_ID
+                                                vm.selectLibrary(FAVORITES_TAB_ID)
+                                                LibraryNavigationSnapshot.viewMode = LibraryViewMode.LIBRARIES
+                                                viewMode = LibraryViewMode.LIBRARIES
+                                            },
+                                            modifier = Modifier.animateItemPlacement()
+                                        )
+                                    }
                                     items(libraries, key = { it.id }) { library ->
                                         ServerLibraryCard(
-                                            library = library,
+                                            title = library.name.ifBlank {
+                                                library.collectionType?.libraryTypeLabel() ?: "Library"
+                                            },
+                                            subtitle = library.collectionType?.libraryTypeLabel() ?: "Mixed",
+                                            kind = if (library.collectionType == "tvshows") {
+                                                ServerLibraryKind.TV
+                                            } else {
+                                                ServerLibraryKind.MOVIES
+                                            },
                                             onClick = {
                                                 saveLibraryPosition()
                                                 observedSelectedLibraryId = library.id
@@ -931,7 +1012,9 @@ fun LibraryScreen(
                                         if (fullListSearchQuery.isBlank()) {
                                             EmptyBlock(
                                                 "Nothing here yet",
-                                                if (showingLibraryItems) {
+                                                if (showingFavorites) {
+                                                    "Favorite movies, shows, and episodes will appear here."
+                                                } else if (showingLibraryItems) {
                                                     "Add items to ${selectedLibrary?.name ?: "this library"} on your Jellyfin server, then refresh."
                                                 } else {
                                                     "Add ${animatedViewMode.title.lowercase()} on your Jellyfin server, then refresh."
@@ -962,20 +1045,6 @@ fun LibraryScreen(
                                             items = featuredItems,
                                             vm = vm,
                                             label = featuredLabel,
-                                            refreshing = refreshing,
-                                            onSearchClick = {
-                                                searchReturnIndex = activeGridState.firstVisibleItemIndex
-                                                searchReturnOffset = activeGridState.firstVisibleItemScrollOffset
-                                                searchOpen = true
-                                            },
-                                            onRefreshClick = {
-                                                refreshRequested = true
-                                                vm.loadHome(force = true)
-                                            },
-                                            onSettingsClick = {
-                                                saveLibraryPosition()
-                                                onSettingsClick()
-                                            },
                                             onItemClick = handleClick
                                         )
                                     }
@@ -1070,6 +1139,15 @@ fun LibraryScreen(
                         }
                     }
                 }
+            }
+            if (!isSearchMode && !fullListSearchOpen && viewMode == LibraryViewMode.HOME) {
+                HomeOverlayControls(
+                    refreshing = refreshing,
+                    onSearchClick = openHomeSearch,
+                    onRefreshClick = refreshHome,
+                    onSettingsClick = openSettings,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
         }
     }
@@ -1259,10 +1337,6 @@ private fun FeaturedCarousel(
     items: List<MediaItem>,
     vm: AppViewModel,
     label: String,
-    refreshing: Boolean,
-    onSearchClick: () -> Unit,
-    onRefreshClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onItemClick: (MediaItem) -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
@@ -1306,22 +1380,35 @@ private fun FeaturedCarousel(
                 onClick = { onItemClick(item) }
             )
         }
-        val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(start = 18.dp, end = 18.dp, top = statusTop + 16.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    }
+}
+
+@Composable
+private fun HomeOverlayControls(
+    refreshing: Boolean,
+    onSearchClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 20.dp, end = 20.dp, top = statusTop + 16.dp, bottom = 16.dp)
+    ) {
+        OverlayIconButton(
+            onClick = onSearchClick,
+            enabled = true,
+            contentDescription = "Search",
+            modifier = Modifier.align(Alignment.TopStart)
         ) {
-            OverlayIconButton(
-                onClick = onSearchClick,
-                enabled = true,
-                contentDescription = "Search"
-            ) {
-                Icon(Icons.Default.Search, contentDescription = null)
-            }
-            Spacer(Modifier.weight(1f))
+            Icon(Icons.Default.Search, contentDescription = null)
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
             OverlayIconButton(
                 onClick = onRefreshClick,
                 enabled = !refreshing,
@@ -1337,7 +1424,6 @@ private fun FeaturedCarousel(
                     Icon(Icons.Default.Refresh, contentDescription = null)
                 }
             }
-            Spacer(Modifier.width(8.dp))
             OverlayIconButton(
                 onClick = onSettingsClick,
                 enabled = true,
@@ -1375,7 +1461,7 @@ private fun FeaturedBanner(
             .fillMaxWidth()
             .padding(bottom = 18.dp)
             .heightIn(min = 420.dp)
-            .aspectRatio(9f / 12.2f)
+            .aspectRatio(9f / 11.6f)
             .background(cs.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
@@ -1408,8 +1494,8 @@ private fun FeaturedBanner(
                     Brush.verticalGradient(
                         0f to Color.Black.copy(alpha = 0.06f),
                         0.38f to Color.Black.copy(alpha = 0.16f),
-                        0.70f to Color.Black.copy(alpha = 0.72f),
-                        0.90f to cs.background.copy(alpha = 0.78f),
+                        0.66f to Color.Black.copy(alpha = 0.70f),
+                        0.86f to cs.background.copy(alpha = 0.72f),
                         1f to cs.background
                     )
                 )
@@ -1510,15 +1596,23 @@ private fun FeaturedBanner(
             }
         }
         if (progress > 0f && progress < 0.99f) {
-            LinearProgressIndicator(
-                progress = { progress },
-                color = cs.primary,
-                trackColor = Color.White.copy(alpha = 0.22f),
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .padding(horizontal = 28.dp, vertical = 12.dp)
                     .height(4.dp)
-            )
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.18f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(progress)
+                        .clip(RoundedCornerShape(50))
+                        .background(cs.primary)
+                )
+            }
         }
     }
 }
@@ -1528,13 +1622,14 @@ private fun OverlayIconButton(
     onClick: () -> Unit,
     enabled: Boolean,
     contentDescription: String,
+    modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
     Surface(
         shape = CircleShape,
         color = Color.Black.copy(alpha = 0.34f),
         contentColor = Color.White,
-        modifier = Modifier.size(44.dp)
+        modifier = modifier.size(48.dp)
     ) {
         Box(
             modifier = Modifier
@@ -1981,7 +2076,9 @@ private fun EmptyBlock(title: String, sub: String) {
 
 @Composable
 private fun ServerLibraryCard(
-    library: MediaItem,
+    title: String,
+    subtitle: String,
+    kind: ServerLibraryKind,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1996,7 +2093,11 @@ private fun ServerLibraryCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                if (library.collectionType == "tvshows") Icons.Default.Tv else Icons.Default.Movie,
+                when (kind) {
+                    ServerLibraryKind.FAVORITES -> Icons.Default.Star
+                    ServerLibraryKind.TV -> Icons.Default.Tv
+                    ServerLibraryKind.MOVIES -> Icons.Default.Movie
+                },
                 contentDescription = null,
                 tint = cs.onSurfaceVariant,
                 modifier = Modifier.size(56.dp)
@@ -2004,7 +2105,7 @@ private fun ServerLibraryCard(
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            library.name.ifBlank { library.collectionType?.libraryTypeLabel() ?: "Library" },
+            title,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = cs.onBackground,
@@ -2012,7 +2113,7 @@ private fun ServerLibraryCard(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            library.collectionType?.libraryTypeLabel() ?: "Mixed",
+            subtitle,
             style = MaterialTheme.typography.bodySmall,
             color = cs.onSurfaceVariant,
             maxLines = 1,
@@ -2020,6 +2121,8 @@ private fun ServerLibraryCard(
         )
     }
 }
+
+private enum class ServerLibraryKind { FAVORITES, MOVIES, TV }
 
 private fun String.libraryTypeLabel(): String = when (this) {
     "movies" -> "Movies"
@@ -2202,6 +2305,7 @@ private fun LibraryTabs(
  * collide with a real Jellyfin item ID (those are GUIDs, no underscores).
  */
 internal const val DOWNLOADS_TAB_ID = "__downloads__"
+internal const val FAVORITES_TAB_ID = "__favorites__"
 
 @Composable
 private fun DownloadsManagementHeader(

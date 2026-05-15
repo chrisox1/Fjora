@@ -7,6 +7,7 @@ import com.example.jellyfinplayer.api.AuthExpiredException
 import com.example.jellyfinplayer.api.JellyfinRepository
 import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
+import com.example.jellyfinplayer.api.UserItemData
 import com.example.jellyfinplayer.data.AppBackgroundColor
 import com.example.jellyfinplayer.data.AppThemeColor
 import com.example.jellyfinplayer.data.AuthStore
@@ -591,7 +592,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val libraryType = _libraries.value.firstOrNull { it.id == libraryId }
                         ?.collectionType
                     val result = if (libraryId != null) {
-                        runCatching { repo.loadLibraryItems(libraryId, libraryType) }
+                        if (libraryId == FAVORITES_TAB_SENTINEL) {
+                            runCatching { repo.loadFavorites() }
+                        } else {
+                            runCatching { repo.loadLibraryItems(libraryId, libraryType) }
+                        }
                     } else {
                         runCatching { repo.loadLibrary() }
                     }
@@ -654,6 +659,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
          * LibraryScreen.kt.
          */
         const val DOWNLOADS_TAB_SENTINEL = "__downloads__"
+        const val FAVORITES_TAB_SENTINEL = "__favorites__"
     }
 
     /**
@@ -671,6 +677,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         loadHome(force = true)
     }
 
+    private fun replaceItemEverywhere(item: MediaItem, removeFromFavorites: Boolean = false) {
+        fun update(list: List<MediaItem>): List<MediaItem> {
+            val replaced = list.map { existing ->
+                if (existing.id == item.id) {
+                    item
+                } else {
+                    existing
+                }
+            }
+            return if (removeFromFavorites && _selectedLibraryId.value == FAVORITES_TAB_SENTINEL) {
+                replaced.filterNot { it.id == item.id }
+            } else {
+                replaced
+            }
+        }
+        _library.value = update(_library.value)
+        _continueWatching.value = update(_continueWatching.value)
+        _nextUp.value = update(_nextUp.value)
+        _searchResults.value = update(_searchResults.value)
+    }
+
+    private fun MediaItem.withUserData(update: UserItemData.() -> UserItemData): MediaItem {
+        val current = userData ?: UserItemData()
+        return copy(userData = current.update())
+    }
+
     /** Refresh just the home rows after a playback session ends. */
     fun refreshHomeRows() {
         if (!repo.isAuthenticated()) return
@@ -684,6 +716,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun loadEpisodes(seriesId: String): List<MediaItem> = repo.loadEpisodes(seriesId)
     suspend fun loadItemsByPerson(person: Person): List<MediaItem> =
         repo.loadItemsByPerson(person)
+
+    suspend fun setFavorite(item: MediaItem, favorite: Boolean): MediaItem {
+        repo.setFavorite(item.id, favorite)
+        val updated = item.withUserData { copy(isFavorite = favorite) }
+        replaceItemEverywhere(updated, removeFromFavorites = !favorite)
+        return updated
+    }
+
+    suspend fun setPlayed(item: MediaItem, played: Boolean): MediaItem {
+        repo.setPlayed(item.id, played)
+        val updated = item.withUserData {
+            copy(
+                played = played,
+                playbackPositionTicks = if (played) 0L else playbackPositionTicks,
+                playedPercentage = if (played) 100.0 else 0.0
+            )
+        }
+        replaceItemEverywhere(updated)
+        refreshHomeRows()
+        return updated
+    }
 
     /** Negotiate a playable stream URL via PlaybackInfo. */
     suspend fun resolveStream(

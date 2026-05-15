@@ -15,6 +15,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +36,7 @@ import com.example.jellyfinplayer.api.MediaItem
 import com.example.jellyfinplayer.api.Person
 import com.example.jellyfinplayer.ui.components.CastRow
 import com.example.jellyfinplayer.ui.components.rememberDownloadStatus
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +53,8 @@ fun MovieDetailScreen(
     // on slow servers so we render with what we have either way.
     var details by remember { mutableStateOf(item) }
     var loadingDetails by remember { mutableStateOf(true) }
+    var userDataUpdating by remember { mutableStateOf(false) }
+    val actionScope = rememberCoroutineScope()
     LaunchedEffect(item.id) {
         loadingDetails = true
         runCatching { vm.loadItemDetails(item.id) }
@@ -105,6 +112,32 @@ fun MovieDetailScreen(
             }
 
             MediaFactChips(details)
+            MediaUserActions(
+                item = details,
+                busy = userDataUpdating,
+                onFavoriteToggle = {
+                    actionScope.launch {
+                        userDataUpdating = true
+                        runCatching {
+                            vm.setFavorite(details, details.userData?.isFavorite != true)
+                        }.onSuccess { details = it }
+                        userDataUpdating = false
+                    }
+                },
+                onWatchedToggle = if (details.type == "Movie" || details.type == "Episode") {
+                    {
+                        actionScope.launch {
+                            userDataUpdating = true
+                            runCatching {
+                                vm.setPlayed(details, details.userData?.played != true)
+                            }.onSuccess { details = it }
+                            userDataUpdating = false
+                        }
+                    }
+                } else {
+                    null
+                }
+            )
             Spacer(Modifier.height(12.dp))
 
             // Primary CTA row — Resume/Play and Download. Both full-width
@@ -494,6 +527,66 @@ private fun MediaFactChips(item: MediaItem) {
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun MediaUserActions(
+    item: MediaItem,
+    busy: Boolean,
+    onFavoriteToggle: () -> Unit,
+    onWatchedToggle: (() -> Unit)?
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .tabletContentWidth()
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .horizontalScroll(rememberScrollState())
+    ) {
+        val favorite = item.userData?.isFavorite == true
+        FilterChip(
+            selected = favorite,
+            enabled = !busy,
+            onClick = onFavoriteToggle,
+            leadingIcon = {
+                Icon(
+                    if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = null
+                )
+            },
+            label = { Text(if (favorite) "Favorited" else "Favorite") },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = cs.primary.copy(alpha = 0.18f),
+                selectedLabelColor = cs.primary,
+                selectedLeadingIconColor = cs.primary
+            ),
+            shape = RoundedCornerShape(50)
+        )
+        if (onWatchedToggle != null) {
+            val watched = item.userData?.played == true
+            FilterChip(
+                selected = watched,
+                enabled = !busy,
+                onClick = onWatchedToggle,
+                leadingIcon = {
+                    Icon(
+                        if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = null
+                    )
+                },
+                label = { Text(if (watched) "Watched" else "Mark watched") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = cs.primary.copy(alpha = 0.18f),
+                    selectedLabelColor = cs.primary,
+                    selectedLeadingIconColor = cs.primary
+                ),
+                shape = RoundedCornerShape(50)
+            )
         }
     }
 }

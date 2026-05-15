@@ -1,6 +1,7 @@
 package com.example.jellyfinplayer.api
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -55,6 +56,19 @@ interface JellyfinApi {
         @Query("SortOrder") sortOrder: String = "Ascending",
         @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
         @Query("Limit") limit: Int = 200
+    ): ItemsResponse
+
+    @GET("Users/{userId}/Items")
+    suspend fun getFavoriteItems(
+        @Path("userId") userId: String,
+        @Header("Authorization") authHeader: String,
+        @Query("Filters") filters: String = "IsFavorite",
+        @Query("IncludeItemTypes") includeItemTypes: String = "Movie,Series,Episode",
+        @Query("Recursive") recursive: Boolean = true,
+        @Query("SortBy") sortBy: String = "SortName",
+        @Query("SortOrder") sortOrder: String = "Ascending",
+        @Query("Fields") fields: String = "Overview,MediaSources,UserData,DateCreated,DateLastMediaAdded,PremiereDate",
+        @Query("Limit") limit: Int = 500
     ): ItemsResponse
 
     /**
@@ -210,5 +224,33 @@ interface JellyfinApi {
     suspend fun reportPlaybackStopped(
         @Header("Authorization") authHeader: String,
         @Body body: PlaybackStopInfo
+    )
+
+    @POST("Users/{userId}/FavoriteItems/{itemId}")
+    suspend fun markFavorite(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+        @Header("Authorization") authHeader: String
+    )
+
+    @DELETE("Users/{userId}/FavoriteItems/{itemId}")
+    suspend fun unmarkFavorite(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+        @Header("Authorization") authHeader: String
+    )
+
+    @POST("Users/{userId}/PlayedItems/{itemId}")
+    suspend fun markPlayed(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+        @Header("Authorization") authHeader: String
+    )
+
+    @DELETE("Users/{userId}/PlayedItems/{itemId}")
+    suspend fun unmarkPlayed(
+        @Path("userId") userId: String,
+        @Path("itemId") itemId: String,
+        @Header("Authorization") authHeader: String
     )
 }

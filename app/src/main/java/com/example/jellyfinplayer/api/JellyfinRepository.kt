@@ -230,6 +230,11 @@ class JellyfinRepository {
         a.getMoviesAndSeries(userId, authHeader()).items
     }
 
+    suspend fun loadFavorites(): List<MediaItem> = mapAuthErrors {
+        val a = api ?: error("Call configure() first")
+        a.getFavoriteItems(userId, authHeader()).items
+    }
+
     /**
      * Load the user's library views (Movies, TV Shows, etc.). Filtered to
      * the kinds we know how to display — movies / tvshows / boxsets /
@@ -271,6 +276,24 @@ class JellyfinRepository {
     suspend fun loadEpisodes(seriesId: String): List<MediaItem> = mapAuthErrors {
         val a = api ?: error("Call configure() first")
         a.getEpisodes(seriesId, authHeader(), userId).items
+    }
+
+    suspend fun setFavorite(itemId: String, favorite: Boolean) = mapAuthErrors {
+        val a = api ?: error("Call configure() first")
+        if (favorite) {
+            a.markFavorite(userId, itemId, authHeader())
+        } else {
+            a.unmarkFavorite(userId, itemId, authHeader())
+        }
+    }
+
+    suspend fun setPlayed(itemId: String, played: Boolean) = mapAuthErrors {
+        val a = api ?: error("Call configure() first")
+        if (played) {
+            a.markPlayed(userId, itemId, authHeader())
+        } else {
+            a.unmarkPlayed(userId, itemId, authHeader())
+        }
     }
 
     suspend fun loadItemDetails(itemId: String): MediaItem = mapAuthErrors {

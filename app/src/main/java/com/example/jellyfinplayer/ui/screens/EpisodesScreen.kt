@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,6 +75,7 @@ fun EpisodesScreen(
     var seriesDetails by remember { mutableStateOf(cached?.details ?: series) }
     var loading by remember { mutableStateOf(cached == null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var favoriteUpdating by remember { mutableStateOf(false) }
     // Seed selectedSeason from the cache so the season tab strip is correct
     // immediately on a back-from-player remount.
     var selectedSeason by remember {
@@ -148,6 +151,7 @@ fun EpisodesScreen(
 
     var showDownloadAllDialog by remember { mutableStateOf(false) }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val actionScope = rememberCoroutineScope()
 
     Scaffold(
         containerColor = cs.background,
@@ -174,8 +178,23 @@ fun EpisodesScreen(
                 onSeasonChange = { selectedSeason = it },
                 onBack = onBack,
                 onDownloadAllClick = { if (episodes.isNotEmpty()) showDownloadAllDialog = true },
+                onFavoriteClick = {
+                    actionScope.launch {
+                        favoriteUpdating = true
+                        runCatching {
+                            vm.setFavorite(seriesDetails, seriesDetails.userData?.isFavorite != true)
+                        }.onSuccess { updated ->
+                            seriesDetails = updated
+                            if (EpisodesCache.seriesId == series.id) {
+                                EpisodesCache.details = updated
+                            }
+                        }
+                        favoriteUpdating = false
+                    }
+                },
                 onEpisodeClick = onEpisodeClick,
                 onPersonClick = onPersonClick,
+                favoriteUpdating = favoriteUpdating,
                 loading = loading,
                 error = error
             )
@@ -224,8 +243,10 @@ private fun EpisodesContent(
     onSeasonChange: (Int) -> Unit,
     onBack: () -> Unit,
     onDownloadAllClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit,
+    favoriteUpdating: Boolean,
     loading: Boolean,
     error: String?
 ) {
@@ -268,7 +289,9 @@ private fun EpisodesContent(
                 onBack = onBack,
                 onPlayClick = { playTarget?.let(onEpisodeClick) },
                 onDownloadAllClick = onDownloadAllClick,
-                downloadEnabled = episodes.isNotEmpty()
+                downloadEnabled = episodes.isNotEmpty(),
+                onFavoriteClick = onFavoriteClick,
+                favoriteUpdating = favoriteUpdating
             )
         }
         item {
@@ -361,7 +384,9 @@ private fun SeriesHero(
     onBack: () -> Unit,
     onPlayClick: () -> Unit,
     onDownloadAllClick: () -> Unit,
-    downloadEnabled: Boolean
+    downloadEnabled: Boolean,
+    onFavoriteClick: () -> Unit,
+    favoriteUpdating: Boolean
 ) {
     val cs = MaterialTheme.colorScheme
     Box(
@@ -458,18 +483,19 @@ private fun SeriesHero(
                     }
                 }
             }
-            if (playTarget != null) {
-                val started = (playTarget.userData?.playbackPositionTicks ?: 0L) > 0L
-                val targetLabel = if (started) "Resume" else "Play"
-                val episodeLabel = playTarget.takeIf { it.type == "Episode" }?.let { ep ->
-                    val s = ep.seasonNumber?.let { "S$it" } ?: ""
-                    val e = ep.episodeNumber?.let { "E$it" } ?: ""
-                    listOf(s, e).filter { it.isNotEmpty() }.joinToString("")
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            val favorite = series.userData?.isFavorite == true
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (playTarget != null) {
+                    val started = (playTarget.userData?.playbackPositionTicks ?: 0L) > 0L
+                    val targetLabel = if (started) "Resume" else "Play"
+                    val episodeLabel = playTarget.takeIf { it.type == "Episode" }?.let { ep ->
+                        val s = ep.seasonNumber?.let { "S$it" } ?: ""
+                        val e = ep.episodeNumber?.let { "E$it" } ?: ""
+                        listOf(s, e).filter { it.isNotEmpty() }.joinToString("")
+                    }
                     Button(
                         onClick = onPlayClick,
                         shape = RoundedCornerShape(50),
@@ -487,15 +513,24 @@ private fun SeriesHero(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
-                    HeroActionChip(
-                        enabled = downloadEnabled,
-                        onClick = onDownloadAllClick
-                    ) {
-                        Icon(
-                            com.example.jellyfinplayer.ui.icons.DownloadIconVector,
-                            contentDescription = "Download"
-                        )
-                    }
+                }
+                HeroActionChip(
+                    enabled = downloadEnabled,
+                    onClick = onDownloadAllClick
+                ) {
+                    Icon(
+                        com.example.jellyfinplayer.ui.icons.DownloadIconVector,
+                        contentDescription = "Download"
+                    )
+                }
+                HeroActionChip(
+                    enabled = !favoriteUpdating,
+                    onClick = onFavoriteClick
+                ) {
+                    Icon(
+                        if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (favorite) "Remove favorite" else "Favorite"
+                    )
                 }
             }
         }
