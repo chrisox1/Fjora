@@ -122,6 +122,7 @@ fun MpvPlayerScreen(
     var mpvBuffering by remember { mutableStateOf(false) }
     var mpvManualSeeking by remember { mutableStateOf(false) }
     var mpvSeekLoadingNonce by remember { mutableIntStateOf(0) }
+    var mpvHasPlaybackSignal by remember { mutableStateOf(false) }
     // True once MPV has finished its initial load + resume-seek + unpause.
     // Used to hide the play/pause/skip controls during the loading phase
     // (the user only sees the spinner — Findroid-style). Reset on item change.
@@ -265,6 +266,7 @@ fun MpvPlayerScreen(
         fileLoaded = false
         mpvFirstFrameReady = false
         mpvManualSeeking = false
+        mpvHasPlaybackSignal = false
         positionMs = 0L
         durationMs = 0L
         subtitleCues = emptyList()
@@ -361,9 +363,11 @@ fun MpvPlayerScreen(
                 if (pos != null) {
                     positionMs = (pos * 1000.0).toLong()
                     lastPollWallMs = System.currentTimeMillis()
+                    if (pos > 0.0) mpvHasPlaybackSignal = true
                 }
                 if (dur != null && dur > 0.0) {
                     durationMs = (dur * 1000.0).toLong()
+                    mpvHasPlaybackSignal = true
                 } else if (durationMs <= 0L) {
                     durationMs = details?.durationMsFallback() ?: item.durationMsFallback() ?: 0L
                 }
@@ -479,6 +483,7 @@ fun MpvPlayerScreen(
             // Unpause only after the seek — this prevents the brief 0→resumeMs
             // play-from-beginning that was visible before.
             MPVLib.setPropertyBoolean("pause", false)
+            delay(250)
             mpvFirstFrameReady = true
         }.onFailure {
             initError = "Couldn't start mpv: ${it.message}"
@@ -1031,7 +1036,7 @@ fun MpvPlayerScreen(
         // network cache (seeking stall) or when the file is loading
         // (fileLoaded=true but duration not yet reported).
         val showMpvSpinner = mpvBuffering || mpvManualSeeking ||
-            (fileLoaded && durationMs == 0L && sourceUrl != null && !mpvFirstFrameReady)
+            (sourceUrl != null && (!mpvFirstFrameReady || !mpvHasPlaybackSignal))
         if (showMpvSpinner) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),
@@ -1274,8 +1279,15 @@ private fun formatMs(ms: Long): String {
 
 private fun seekMpvAbsolute(positionMs: Long) {
     val targetSec = (positionMs.coerceAtLeast(0L) / 1000.0)
-    runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+keyframes")) }
+    val wasPaused = runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() ?: false
+    if (!wasPaused) {
+        runCatching { MPVLib.setPropertyBoolean("pause", true) }
+    }
+    runCatching { MPVLib.command(arrayOf("seek", targetSec.toString(), "absolute+exact")) }
     runCatching { MPVLib.setPropertyDouble("time-pos", targetSec) }
+    if (!wasPaused) {
+        runCatching { MPVLib.setPropertyBoolean("pause", false) }
+    }
 }
 
 private fun seekMpvRelative(deltaMs: Long) {

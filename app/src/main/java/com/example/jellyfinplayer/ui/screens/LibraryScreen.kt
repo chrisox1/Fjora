@@ -1844,9 +1844,6 @@ private fun LatestMediaRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    LaunchedEffect(items.map { it.id }) {
-        state.scrollToItem(0, 0)
-    }
     Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier
@@ -1865,33 +1862,20 @@ private fun LatestMediaRow(
                 Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Show all $title")
             }
         }
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val edgePadding = 16.dp
-            val itemSpacing = 14.dp
-            val edgeSpacer = edgePadding - itemSpacing
-            LazyRow(
-                state = state,
-                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                contentPadding = PaddingValues(bottom = 2.dp),
-                modifier = Modifier
-                    .requiredWidth(maxWidth + edgePadding * 2)
-                    .offset(x = -edgePadding)
-            ) {
-                item(key = "${title}_start_padding") {
-                    Spacer(Modifier.width(edgeSpacer))
-                }
-                items(items, key = { it.id }) { item ->
-                    LibraryCard(
-                        item = item,
-                        vm = vm,
-                        onClick = { onItemClick(item) },
-                        showTypeBadge = false,
-                        modifier = Modifier.width(150.dp)
-                    )
-                }
-                item(key = "${title}_end_padding") {
-                    Spacer(Modifier.width(edgeSpacer))
-                }
+        LazyRow(
+            state = state,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 2.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(items, key = { it.id }) { item ->
+                LibraryCard(
+                    item = item,
+                    vm = vm,
+                    onClick = { onItemClick(item) },
+                    showTypeBadge = false,
+                    modifier = Modifier.width(150.dp)
+                )
             }
         }
     }
@@ -1907,30 +1891,14 @@ private fun WideRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    LaunchedEffect(items.map { it.id }) {
-        state.scrollToItem(0, 0)
-    }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val edgePadding = 16.dp
-        val itemSpacing = 12.dp
-        val edgeSpacer = edgePadding - itemSpacing
-        LazyRow(
-            state = state,
-            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
-            modifier = Modifier
-                .requiredWidth(maxWidth + edgePadding * 2)
-                .offset(x = -edgePadding)
-        ) {
-            item(key = "wide_start_padding_${items.firstOrNull()?.id.orEmpty()}") {
-                Spacer(Modifier.width(edgeSpacer))
-            }
-            items(items, key = { it.id }) { item ->
-                WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
-            }
-            item(key = "wide_end_padding_${items.lastOrNull()?.id.orEmpty()}") {
-                Spacer(Modifier.width(edgeSpacer))
-            }
+    LazyRow(
+        state = state,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(items, key = { it.id }) { item ->
+            WideCard(item, vm, showProgress, onClick = { onItemClick(item) })
         }
     }
 }
