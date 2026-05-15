@@ -671,7 +671,37 @@ fun LibraryScreen(
             }
         },
         topBar = {
-            if (viewMode != LibraryViewMode.HOME || showingDownloads) {
+            if (isSearchMode) {
+                SearchTopBar {
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChange = { vm.setSearchQuery(it) },
+                        onClear = {
+                            vm.clearSearch()
+                            searchOpen = false
+                            pendingSearchRestore = true
+                            keyboard?.hide()
+                        },
+                        onSubmit = { keyboard?.hide() },
+                        modifier = Modifier.focusRequester(searchFocusRequester)
+                    )
+                }
+            } else if (viewMode != LibraryViewMode.HOME && fullListSearchOpen) {
+                SearchTopBar {
+                    SearchBar(
+                        query = fullListSearchQuery,
+                        onQueryChange = { fullListSearchQuery = it },
+                        onClear = {
+                            fullListSearchOpen = false
+                            fullListSearchQuery = ""
+                            pendingFullListSearchRestore = true
+                            keyboard?.hide()
+                        },
+                        onSubmit = { keyboard?.hide() },
+                        modifier = Modifier.focusRequester(searchFocusRequester)
+                    )
+                }
+            } else if (viewMode != LibraryViewMode.HOME || showingDownloads) {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
@@ -729,54 +759,6 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (isSearchMode) {
-                Surface(
-                    color = MaterialTheme.colorScheme.background,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            top = WindowInsets.safeDrawing
-                                .asPaddingValues()
-                                .calculateTopPadding()
-                        )
-                ) {
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChange = { vm.setSearchQuery(it) },
-                        onClear = {
-                            vm.clearSearch()
-                            searchOpen = false
-                            pendingSearchRestore = true
-                            keyboard?.hide()
-                        },
-                        onSubmit = { keyboard?.hide() },
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .focusRequester(searchFocusRequester)
-                    )
-                }
-            } else if (viewMode != LibraryViewMode.HOME && fullListSearchOpen) {
-                Surface(
-                    color = MaterialTheme.colorScheme.background,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    SearchBar(
-                        query = fullListSearchQuery,
-                        onQueryChange = { fullListSearchQuery = it },
-                        onClear = {
-                            fullListSearchOpen = false
-                            fullListSearchQuery = ""
-                            pendingFullListSearchRestore = true
-                            keyboard?.hide()
-                        },
-                        onSubmit = { keyboard?.hide() },
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .focusRequester(searchFocusRequester)
-                    )
-                }
-            }
-
             Box(Modifier.fillMaxSize()) {
                 AnimatedContent(
                     targetState = LibraryContentTarget(
@@ -1280,6 +1262,23 @@ fun LibraryScreen(
     }
 }
 
+@Composable
+private fun SearchTopBar(content: @Composable () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp)
+        ) {
+            content()
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchBar(
@@ -1289,21 +1288,46 @@ private fun SearchBar(
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedTextField(
+    TextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 54.dp),
         placeholder = { Text("Search movies and shows…") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+        leadingIcon = {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         trailingIcon = {
             IconButton(onClick = onClear) {
-                Icon(Icons.Default.Clear, contentDescription = "Close search")
+                Icon(
+                    Icons.Default.Clear,
+                    contentDescription = "Close search",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f),
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            cursorColor = MaterialTheme.colorScheme.primary,
+            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     )
 }
 
