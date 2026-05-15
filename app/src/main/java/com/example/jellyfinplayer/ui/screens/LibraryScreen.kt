@@ -772,16 +772,8 @@ fun LibraryScreen(
                 AnimatedContent(
                     targetState = viewMode,
                     transitionSpec = {
-                        val openingFullList = initialState == LibraryViewMode.HOME &&
-                            targetState != LibraryViewMode.HOME
-                        val distance = if (openingFullList) 48 else -48
-                        (
-                            slideInHorizontally(animationSpec = tween(180)) { distance } +
-                                fadeIn(animationSpec = tween(140))
-                            ) togetherWith (
-                            slideOutHorizontally(animationSpec = tween(180)) { -distance / 2 } +
-                                fadeOut(animationSpec = tween(120))
-                            )
+                        fadeIn(animationSpec = tween(140)) togetherWith
+                            fadeOut(animationSpec = tween(100))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -1455,8 +1447,10 @@ private fun FeaturedBanner(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    val backdrop = vm.backdropUrl(item, maxWidth = 1280)
-    val artwork = backdrop ?: vm.posterUrl(item, maxHeight = 720)
+    val artwork = when (item.type) {
+        "Episode" -> vm.seriesPosterUrl(item, maxHeight = 900)
+        else -> vm.posterUrl(item, maxHeight = 900)
+    } ?: vm.backdropUrl(item, maxWidth = 1280)
     val progress = item.playedFraction ?: 0f
     val remainingMinutes = remainingMinutes(item, progress)
     val title = if (item.type == "Episode" && !item.seriesName.isNullOrBlank()) {
@@ -1471,8 +1465,8 @@ private fun FeaturedBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 18.dp)
-            .heightIn(min = 420.dp)
-            .aspectRatio(9f / 11.6f)
+            .heightIn(min = 370.dp)
+            .aspectRatio(9f / 10.3f)
             .background(cs.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
@@ -1603,25 +1597,6 @@ private fun FeaturedBanner(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 18.dp)
-                )
-            }
-        }
-        if (progress > 0f && progress < 0.99f) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp, vertical = 12.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.18f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(progress)
-                        .clip(RoundedCornerShape(50))
-                        .background(cs.primary)
                 )
             }
         }
@@ -1806,17 +1781,11 @@ private fun LatestMediaRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    Column(
-        Modifier
-            .requiredWidth(screenWidth + 40.dp)
-            .offset(x = (-16).dp)
-            .padding(top = 14.dp)
-    ) {
+    Column(Modifier.padding(top = 14.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 56.dp, bottom = 8.dp),
+                .padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -1833,7 +1802,7 @@ private fun LatestMediaRow(
         LazyRow(
             state = state,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 56.dp, bottom = 2.dp)
+            contentPadding = PaddingValues(bottom = 2.dp)
         ) {
             items(items, key = { it.id }) { item ->
                 LibraryCard(
@@ -1858,14 +1827,10 @@ private fun WideRow(
     state: androidx.compose.foundation.lazy.LazyListState =
         androidx.compose.foundation.lazy.rememberLazyListState()
 ) {
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     LazyRow(
         state = state,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 56.dp, top = 4.dp, bottom = 4.dp),
-        modifier = Modifier
-            .requiredWidth(screenWidth + 40.dp)
-            .offset(x = (-16).dp)
+        contentPadding = PaddingValues(vertical = 4.dp)
     ) {
         items(items, key = { it.id }) { item ->
             WideCard(item, vm, showProgress, onClick = { onItemClick(item) })

@@ -96,7 +96,30 @@ fun MovieDetailScreen(
                 vm = vm,
                 item = details,
                 topPadding = padding.calculateTopPadding(),
-                onSeriesClick = onSeriesClick
+                onSeriesClick = onSeriesClick,
+                busy = userDataUpdating,
+                onFavoriteToggle = {
+                    actionScope.launch {
+                        userDataUpdating = true
+                        runCatching {
+                            vm.setFavorite(details, details.userData?.isFavorite != true)
+                        }.onSuccess { details = it }
+                        userDataUpdating = false
+                    }
+                },
+                onWatchedToggle = if (details.type == "Movie" || details.type == "Episode") {
+                    {
+                        actionScope.launch {
+                            userDataUpdating = true
+                            runCatching {
+                                vm.setPlayed(details, details.userData?.played != true)
+                            }.onSuccess { details = it }
+                            userDataUpdating = false
+                        }
+                    }
+                } else {
+                    null
+                }
             )
 
             AnimatedVisibility(
@@ -111,34 +134,7 @@ fun MovieDetailScreen(
                 )
             }
 
-            MediaFactChips(details) {
-                MediaUserActions(
-                    item = details,
-                    busy = userDataUpdating,
-                    onFavoriteToggle = {
-                        actionScope.launch {
-                            userDataUpdating = true
-                            runCatching {
-                                vm.setFavorite(details, details.userData?.isFavorite != true)
-                            }.onSuccess { details = it }
-                            userDataUpdating = false
-                        }
-                    },
-                    onWatchedToggle = if (details.type == "Movie" || details.type == "Episode") {
-                        {
-                            actionScope.launch {
-                                userDataUpdating = true
-                                runCatching {
-                                    vm.setPlayed(details, details.userData?.played != true)
-                                }.onSuccess { details = it }
-                                userDataUpdating = false
-                            }
-                        }
-                    } else {
-                        null
-                    }
-                )
-            }
+            MediaFactChips(details)
             Spacer(Modifier.height(12.dp))
 
             // Primary CTA row — Resume/Play and Download. Both full-width
@@ -380,7 +376,10 @@ internal fun Hero(
     vm: AppViewModel,
     item: MediaItem,
     topPadding: androidx.compose.ui.unit.Dp,
-    onSeriesClick: (MediaItem, Int?, String?) -> Unit = { _, _, _ -> }
+    onSeriesClick: (MediaItem, Int?, String?) -> Unit = { _, _, _ -> },
+    busy: Boolean = false,
+    onFavoriteToggle: () -> Unit = {},
+    onWatchedToggle: (() -> Unit)? = null
 ) {
     val cs = MaterialTheme.colorScheme
     Box(
@@ -487,12 +486,23 @@ internal fun Hero(
                     item.communityRating?.let { add("Rating ${"%.1f".format(it)}") }
                 }.joinToString(" - ")
                 if (meta.isNotEmpty()) {
-                    Text(
-                        meta,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(top = 4.dp)
-                    )
+                    ) {
+                        Text(
+                            meta,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                        HeroUserActions(
+                            item = item,
+                            busy = busy,
+                            onFavoriteToggle = onFavoriteToggle,
+                            onWatchedToggle = onWatchedToggle
+                        )
+                    }
                 }
             }
         }
@@ -532,6 +542,75 @@ private fun MediaFactChips(
             }
         }
         trailingContent()
+    }
+}
+
+@Composable
+private fun HeroUserActions(
+    item: MediaItem,
+    busy: Boolean,
+    onFavoriteToggle: () -> Unit,
+    onWatchedToggle: (() -> Unit)?
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        val favorite = item.userData?.isFavorite == true
+        HeroMetaIcon(
+            active = favorite,
+            enabled = !busy,
+            onClick = onFavoriteToggle,
+            contentDescription = if (favorite) "Remove favorite" else "Favorite"
+        ) {
+            Icon(
+                if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        if (onWatchedToggle != null) {
+            val watched = item.userData?.played == true
+            HeroMetaIcon(
+                active = watched,
+                enabled = !busy,
+                onClick = onWatchedToggle,
+                contentDescription = if (watched) "Mark unwatched" else "Mark watched"
+            ) {
+                Icon(
+                    if (watched) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroMetaIcon(
+    active: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color.White.copy(alpha = if (active) 0.22f else 0.10f),
+        contentColor = if (active) MaterialTheme.colorScheme.primary
+            else Color.White.copy(alpha = 0.82f),
+        modifier = Modifier.size(24.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = contentDescription,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
     }
 }
 
