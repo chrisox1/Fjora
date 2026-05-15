@@ -7,8 +7,6 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -772,8 +770,8 @@ fun LibraryScreen(
                 AnimatedContent(
                     targetState = viewMode,
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(140)) togetherWith
-                            fadeOut(animationSpec = tween(100))
+                        fadeIn(animationSpec = tween(90)) togetherWith
+                            fadeOut(animationSpec = tween(60))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -843,7 +841,18 @@ fun LibraryScreen(
                             },
                             columns = GridCells.Adaptive(minSize = 138.dp),
                             contentPadding = PaddingValues(
-                                start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = if (
+                                    animatedViewMode == LibraryViewMode.HOME &&
+                                    selectedLibraryId == null &&
+                                    !isSearchMode
+                                ) {
+                                    0.dp
+                                } else {
+                                    4.dp
+                                },
+                                bottom = 32.dp
                             ),
                             verticalArrangement = Arrangement.spacedBy(18.dp),
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -1447,10 +1456,11 @@ private fun FeaturedBanner(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
-    val artwork = when (item.type) {
+    val posterArtwork = when (item.type) {
         "Episode" -> vm.seriesPosterUrl(item, maxHeight = 900)
         else -> vm.posterUrl(item, maxHeight = 900)
-    } ?: vm.backdropUrl(item, maxWidth = 1280)
+    }
+    val artwork = posterArtwork ?: vm.backdropUrl(item, maxWidth = 1280)
     val progress = item.playedFraction ?: 0f
     val remainingMinutes = remainingMinutes(item, progress)
     val title = if (item.type == "Episode" && !item.seriesName.isNullOrBlank()) {
@@ -1471,10 +1481,16 @@ private fun FeaturedBanner(
             .clickable(onClick = onClick)
     ) {
         if (artwork != null) {
-            val imageRequest = remember(artwork, context) {
+            val imageRequest = remember(artwork, posterArtwork, context) {
                 coil.request.ImageRequest.Builder(context)
                     .data(artwork)
-                    .size(1280, 720)
+                    .apply {
+                        if (posterArtwork != null) {
+                            size(900, 1350)
+                        } else {
+                            size(1280, 720)
+                        }
+                    }
                     .crossfade(false)
                     .build()
             }
@@ -1482,6 +1498,7 @@ private fun FeaturedBanner(
                 model = imageRequest,
                 contentDescription = item.name,
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -1672,10 +1689,27 @@ private fun homeHeroItems(
     libraryItems: List<MediaItem>
 ): List<MediaItem> {
     val featured = libraryItems.take(1)
-    return when (source) {
+    val base = when (source) {
         HomeHeroSource.RESUME -> continueWatching.ifEmpty { featured }
         HomeHeroSource.NEXT_UP -> nextUp.ifEmpty { featured }
         HomeHeroSource.FEATURED -> featured
+    }
+    return dedupeHeroSeries(base)
+}
+
+private fun dedupeHeroSeries(items: List<MediaItem>): List<MediaItem> {
+    val grouped = linkedMapOf<String, MutableList<MediaItem>>()
+    items.forEach { item ->
+        val key = item.seriesId ?: item.id
+        grouped.getOrPut(key) { mutableListOf() }.add(item)
+    }
+    return grouped.values.map { group ->
+        group.maxWithOrNull(
+            compareBy<MediaItem> { it.seasonNumber ?: -1 }
+                .thenBy { it.episodeNumber ?: -1 }
+                .thenBy { it.userData?.lastPlayedDate.orEmpty() }
+                .thenBy { it.dateCreated.orEmpty() }
+        ) ?: group.first()
     }
 }
 
@@ -1802,7 +1836,10 @@ private fun LatestMediaRow(
         LazyRow(
             state = state,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 2.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 2.dp),
+            modifier = Modifier
+                .requiredWidth(LocalConfiguration.current.screenWidthDp.dp)
+                .offset(x = (-16).dp)
         ) {
             items(items, key = { it.id }) { item ->
                 LibraryCard(
@@ -1830,7 +1867,10 @@ private fun WideRow(
     LazyRow(
         state = state,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(vertical = 4.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+        modifier = Modifier
+            .requiredWidth(LocalConfiguration.current.screenWidthDp.dp)
+            .offset(x = (-16).dp)
     ) {
         items(items, key = { it.id }) { item ->
             WideCard(item, vm, showProgress, onClick = { onItemClick(item) })

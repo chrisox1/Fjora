@@ -669,6 +669,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadLibraryPreviews(libraries: List<MediaItem>) {
+        if (_libraryPreviewItems.value.isNotEmpty()) return
         viewModelScope.launch {
             val previews = mutableMapOf<String, MediaItem>()
             runCatching { repo.loadFavorites().shuffled().firstOrNull() }

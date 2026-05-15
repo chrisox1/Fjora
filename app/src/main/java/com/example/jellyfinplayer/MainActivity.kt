@@ -140,6 +140,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
         // Register the PiP action receiver. Use RECEIVER_NOT_EXPORTED on
         // Android 14+ so only our own app can fire these intents (the
         // PendingIntents we create internally already do this, but the
@@ -241,12 +245,8 @@ private fun AppNav(vm: AppViewModel, inPip: Boolean) {
         onDispose { PlayerPresence.isPlayerOnTop = false }
     }
 
-    // Defensive cutout-mode reset. The player extends video into the notch
-    // via SHORT_EDGES while playing, but if onDispose misses (e.g. activity
-    // recreated mid-flight), the mode could persist into the rest of the
-    // app — making library text overlap the notch. Whenever we're NOT on
-    // the player screen, force DEFAULT cutout mode so all other screens
-    // get their normal status-bar-safe area.
+    // Keep the app eligible to draw into the cutout. Individual screens still
+    // decide their own padding, but the home artwork can fill the notch area.
     val activity = context as? Activity
     LaunchedEffect(screen, activity) {
         val inAnyPlayer = screen is Screen.Player || screen is Screen.MpvPlayer
