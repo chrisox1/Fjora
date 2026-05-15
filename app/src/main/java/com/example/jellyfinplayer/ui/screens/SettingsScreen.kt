@@ -46,6 +46,7 @@ fun SettingsScreen(
     val settings = vm.settings.collectAsState().value
     val accounts = vm.accounts.collectAsState().value
     val activeId = vm.activeAccountId.collectAsState().value
+    val connectedServerName = vm.serverName.collectAsState().value
     val context = androidx.compose.ui.platform.LocalContext.current
     var showQualityDialog by remember { mutableStateOf(false) }
     var showThemeColorDialog by remember { mutableStateOf(false) }
@@ -93,6 +94,10 @@ fun SettingsScreen(
             // a check on the leading avatar; tap a non-active row to switch;
             // trash icon opens the delete confirmation sheet.
             SectionLabel("Accounts")
+            InfoRow(
+                label = "Connected server",
+                value = connectedServerName.ifBlank { vm.serverUrl().ifBlank { "Not connected" } }
+            )
             accounts.forEach { account ->
                 AccountRow(
                     account = account,
@@ -489,6 +494,26 @@ fun SettingsScreen(
                 TextButton(onClick = { showSignOutAllConfirm = false }) { Text("Cancel") }
             },
             shape = RoundedCornerShape(12.dp)
+        )
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

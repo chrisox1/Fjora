@@ -5,10 +5,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -35,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Movie
@@ -55,6 +54,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -133,7 +133,6 @@ fun LibraryScreen(
     val settings = vm.settings.collectAsState().value
     val serverName = vm.serverName.collectAsState().value
     val refreshing = vm.homeLoadInFlight.collectAsState().value
-    val libraries = vm.libraries.collectAsState().value
     val selectedLibraryId = vm.selectedLibraryId.collectAsState().value
     val searchQuery = vm.searchQuery.collectAsState().value
     val searchResults = vm.searchResults.collectAsState().value
@@ -462,17 +461,32 @@ fun LibraryScreen(
         showSortDialog = false
         viewMode = mode
     }
-    val libraryTabsAtTop by remember {
-        derivedStateOf {
-            homeGridState.firstVisibleItemIndex == 0 &&
-                homeGridState.firstVisibleItemScrollOffset < 12
-        }
+    fun openHomeFromBottomBar() {
+        observedSelectedLibraryId = null
+        vm.selectLibrary(null)
+        vm.clearSearch()
+        searchOpen = false
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+        showSortDialog = false
+        returnToHomeMode()
     }
-    val showLibraryTabs = !isSearchMode &&
-        viewMode == LibraryViewMode.HOME &&
-        (libraries.size > 1 || downloads.isNotEmpty()) &&
-        libraryTabsAtTop
-
+    fun openLibrariesFromBottomBar() {
+        observedSelectedLibraryId = null
+        vm.selectLibrary(null)
+        openFullList(LibraryViewMode.MOVIES)
+    }
+    fun openDownloadsFromBottomBar() {
+        observedSelectedLibraryId = DOWNLOADS_TAB_ID
+        vm.selectLibrary(DOWNLOADS_TAB_ID)
+        vm.clearSearch()
+        searchOpen = false
+        fullListSearchOpen = false
+        fullListSearchQuery = ""
+        showSortDialog = false
+        LibraryNavigationSnapshot.viewMode = LibraryViewMode.HOME
+        viewMode = LibraryViewMode.HOME
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val imageLoader = remember(context) { coil.Coil.imageLoader(context) }
 
@@ -561,69 +575,42 @@ fun LibraryScreen(
         // overlap in any orientation.
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (!isSearchMode && !fullListSearchOpen) {
+                FjoraBottomNavigation(
+                    selected = when {
+                        selectedLibraryId == DOWNLOADS_TAB_ID -> BottomDestination.DOWNLOADS
+                        viewMode != LibraryViewMode.HOME -> BottomDestination.LIBRARIES
+                        else -> BottomDestination.HOME
+                    },
+                    onHomeClick = { openHomeFromBottomBar() },
+                    onLibrariesClick = { openLibrariesFromBottomBar() },
+                    onDownloadsClick = { openDownloadsFromBottomBar() }
+                )
+            }
+        },
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        if (viewMode == LibraryViewMode.HOME) {
-                            serverName.ifBlank { vm.serverUrl().ifBlank { "Fjora" } }
-                        } else {
-                            viewMode.title
-                        },
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = if (viewMode == LibraryViewMode.HOME) {
-                            Modifier.clickable { showServerInfoDialog = true }
-                        } else {
-                            Modifier
-                        }
-                    )
-                },
-                navigationIcon = {
-                    if (viewMode == LibraryViewMode.HOME) {
-                        IconButton(onClick = {
-                            searchReturnIndex = activeGridState.firstVisibleItemIndex
-                            searchReturnOffset = activeGridState.firstVisibleItemScrollOffset
-                            searchOpen = true
-                        }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search")
-                        }
-                    } else {
+            if (viewMode != LibraryViewMode.HOME) {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            viewMode.title,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                        )
+                    },
+                    navigationIcon = {
                         IconButton(onClick = { returnToHomeMode() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back"
                             )
                         }
-                    }
-                },
-                actions = {
-                    if (viewMode == LibraryViewMode.HOME) {
-                        IconButton(
-                            enabled = !refreshing,
-                            onClick = {
-                                refreshRequested = true
-                                vm.loadHome(force = true)
-                            }
-                        ) {
-                            if (refreshing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                            }
-                        }
-                        IconButton(onClick = {
-                            saveLibraryPosition()
-                            onSettingsClick()
-                        }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
-                        }
-                    } else {
+                    },
+                    actions = {
                         IconButton(onClick = {
                             fullListSearchReturnIndex = fullListGridState.firstVisibleItemIndex
                             fullListSearchReturnOffset = fullListGridState.firstVisibleItemScrollOffset
@@ -634,12 +621,12 @@ fun LibraryScreen(
                         IconButton(onClick = { showSortDialog = true }) {
                             Icon(Icons.Default.SwapVert, contentDescription = "Sort")
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
-            )
+            }
         }
     ) { padding ->
         Column(
@@ -687,19 +674,6 @@ fun LibraryScreen(
                             .focusRequester(searchFocusRequester)
                     )
                 }
-            }
-
-            AnimatedVisibility(
-                visible = showLibraryTabs,
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
-            ) {
-                LibraryTabs(
-                    libraries = libraries,
-                    selectedId = selectedLibraryId,
-                    hasDownloads = downloads.isNotEmpty(),
-                    onSelect = { vm.selectLibrary(it) }
-                )
             }
 
             Box(Modifier.fillMaxSize()) {
@@ -904,6 +878,20 @@ fun LibraryScreen(
                                             items = featuredItems,
                                             vm = vm,
                                             label = featuredLabel,
+                                            refreshing = refreshing,
+                                            onSearchClick = {
+                                                searchReturnIndex = activeGridState.firstVisibleItemIndex
+                                                searchReturnOffset = activeGridState.firstVisibleItemScrollOffset
+                                                searchOpen = true
+                                            },
+                                            onRefreshClick = {
+                                                refreshRequested = true
+                                                vm.loadHome(force = true)
+                                            },
+                                            onSettingsClick = {
+                                                saveLibraryPosition()
+                                                onSettingsClick()
+                                            },
                                             onItemClick = handleClick
                                         )
                                     }
@@ -1187,10 +1175,15 @@ private fun FeaturedCarousel(
     items: List<MediaItem>,
     vm: AppViewModel,
     label: String,
+    refreshing: Boolean,
+    onSearchClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onItemClick: (MediaItem) -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
     var lastTouchAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
     LaunchedEffect(items.size) {
         while (items.size > 1) {
@@ -1205,18 +1198,20 @@ private fun FeaturedCarousel(
     }
 
     Box(
-        modifier = Modifier.pointerInput(items.size) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitPointerEvent()
-                    lastTouchAt = System.currentTimeMillis()
+        modifier = Modifier
+            .width(screenWidth)
+            .offset(x = (-16).dp)
+            .pointerInput(items.size) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent()
+                        lastTouchAt = System.currentTimeMillis()
+                    }
                 }
             }
-        }
     ) {
         HorizontalPager(
             state = pagerState,
-            pageSpacing = 12.dp,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
             val item = items[page]
@@ -1224,6 +1219,10 @@ private fun FeaturedCarousel(
                 item = item,
                 vm = vm,
                 label = label,
+                refreshing = refreshing,
+                onSearchClick = onSearchClick,
+                onRefreshClick = onRefreshClick,
+                onSettingsClick = onSettingsClick,
                 onClick = { onItemClick(item) }
             )
         }
@@ -1235,6 +1234,10 @@ private fun FeaturedBanner(
     item: MediaItem,
     vm: AppViewModel,
     label: String,
+    refreshing: Boolean,
+    onSearchClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -1254,10 +1257,9 @@ private fun FeaturedBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 2.dp, bottom = 18.dp)
+            .padding(bottom = 18.dp)
             .heightIn(min = 420.dp)
-            .aspectRatio(9f / 12.4f)
-            .clip(RoundedCornerShape(20.dp))
+            .aspectRatio(9f / 12.2f)
             .background(cs.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
@@ -1306,6 +1308,45 @@ private fun FeaturedBanner(
                     )
                 )
         )
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OverlayIconButton(
+                onClick = onSearchClick,
+                enabled = true,
+                contentDescription = "Search"
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+            }
+            Spacer(Modifier.weight(1f))
+            OverlayIconButton(
+                onClick = onRefreshClick,
+                enabled = !refreshing,
+                contentDescription = "Refresh"
+            ) {
+                if (refreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            OverlayIconButton(
+                onClick = onSettingsClick,
+                enabled = true,
+                contentDescription = "Settings"
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null)
+            }
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -1401,6 +1442,32 @@ private fun FeaturedBanner(
                     .height(4.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun OverlayIconButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    contentDescription: String,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.34f),
+        contentColor = Color.White,
+        modifier = Modifier.size(44.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    onClickLabel = contentDescription,
+                    onClick = { if (enabled) onClick() }
+                ),
+            contentAlignment = Alignment.Center,
+            content = content
+        )
     }
 }
 
@@ -1536,19 +1603,6 @@ private fun SectionHeader(title: String) {
         modifier = Modifier.padding(top = 14.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.onBackground,
-            contentColor = MaterialTheme.colorScheme.background,
-            modifier = Modifier.size(28.dp)
-        ) {
-            Icon(
-                Icons.Default.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.padding(5.dp)
-            )
-        }
-        Spacer(Modifier.width(10.dp))
         Text(
             title,
             style = MaterialTheme.typography.titleLarge,
@@ -1888,6 +1942,74 @@ private fun warmDownloadImages(
                 .build()
         )
     }
+}
+
+private enum class BottomDestination {
+    HOME,
+    LIBRARIES,
+    DOWNLOADS
+}
+
+@Composable
+private fun FjoraBottomNavigation(
+    selected: BottomDestination,
+    onHomeClick: () -> Unit,
+    onLibrariesClick: () -> Unit,
+    onDownloadsClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    Surface(
+        color = cs.background.copy(alpha = 0.94f),
+        tonalElevation = 0.dp,
+        shadowElevation = 10.dp
+    ) {
+        NavigationBar(
+            containerColor = Color.Transparent,
+            tonalElevation = 0.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(76.dp)
+        ) {
+            NavigationBarItem(
+                selected = selected == BottomDestination.HOME,
+                onClick = onHomeClick,
+                icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                label = { Text("Home") },
+                colors = fjoraBottomNavigationItemColors()
+            )
+            NavigationBarItem(
+                selected = selected == BottomDestination.LIBRARIES,
+                onClick = onLibrariesClick,
+                icon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                label = { Text("Libraries") },
+                colors = fjoraBottomNavigationItemColors()
+            )
+            NavigationBarItem(
+                selected = selected == BottomDestination.DOWNLOADS,
+                onClick = onDownloadsClick,
+                icon = {
+                    Icon(
+                        com.example.jellyfinplayer.ui.icons.DownloadIconVector,
+                        contentDescription = null
+                    )
+                },
+                label = { Text("Downloads") },
+                colors = fjoraBottomNavigationItemColors()
+            )
+        }
+    }
+}
+
+@Composable
+private fun fjoraBottomNavigationItemColors(): NavigationBarItemColors {
+    val cs = MaterialTheme.colorScheme
+    return NavigationBarItemDefaults.colors(
+        selectedIconColor = cs.onPrimary,
+        selectedTextColor = cs.onBackground,
+        indicatorColor = cs.primary,
+        unselectedIconColor = cs.onSurfaceVariant,
+        unselectedTextColor = cs.onSurfaceVariant
+    )
 }
 
 /**

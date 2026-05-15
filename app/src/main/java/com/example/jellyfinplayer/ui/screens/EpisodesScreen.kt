@@ -151,40 +151,7 @@ fun EpisodesScreen(
 
     Scaffold(
         containerColor = cs.background,
-        contentWindowInsets = WindowInsets.safeDrawing,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "",
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    // Download all episodes button — only enabled once the
-                    // episode list has loaded so we know how many there
-                    // would actually be.
-                    if (episodes.isNotEmpty()) {
-                        IconButton(onClick = { showDownloadAllDialog = true }) {
-                            Icon(
-                                imageVector = com.example.jellyfinplayer.ui.icons.DownloadIconVector,
-                                contentDescription = "Download all episodes"
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
-            )
-        }
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { padding ->
         Box(
             Modifier
@@ -192,7 +159,7 @@ fun EpisodesScreen(
                 .padding(padding)
         ) {
             // Render-with-stale-data: the series hero and overview don't
-            // need the episodes API call — we already have all of that on
+            // need the episodes API call; we already have all of that on
             // the `series` object passed in. Show that immediately and only
             // gate the episode list itself on the load state.
             EpisodesContent(
@@ -203,6 +170,8 @@ fun EpisodesScreen(
                 selectedSeason = selectedSeason,
                 initialEpisodeId = initialEpisodeId,
                 onSeasonChange = { selectedSeason = it },
+                onBack = onBack,
+                onDownloadAllClick = { if (episodes.isNotEmpty()) showDownloadAllDialog = true },
                 onEpisodeClick = onEpisodeClick,
                 onPersonClick = onPersonClick,
                 loading = loading,
@@ -251,6 +220,8 @@ private fun EpisodesContent(
     selectedSeason: Int?,
     initialEpisodeId: String?,
     onSeasonChange: (Int) -> Unit,
+    onBack: () -> Unit,
+    onDownloadAllClick: () -> Unit,
     onEpisodeClick: (MediaItem) -> Unit,
     onPersonClick: (Person) -> Unit,
     loading: Boolean,
@@ -292,7 +263,10 @@ private fun EpisodesContent(
                 vm = vm,
                 series = series,
                 playTarget = playTarget,
-                onPlayClick = { playTarget?.let(onEpisodeClick) }
+                onBack = onBack,
+                onPlayClick = { playTarget?.let(onEpisodeClick) },
+                onDownloadAllClick = onDownloadAllClick,
+                downloadEnabled = episodes.isNotEmpty()
             )
         }
         item {
@@ -382,13 +356,16 @@ private fun SeriesHero(
     vm: AppViewModel,
     series: MediaItem,
     playTarget: MediaItem?,
-    onPlayClick: () -> Unit
+    onBack: () -> Unit,
+    onPlayClick: () -> Unit,
+    onDownloadAllClick: () -> Unit,
+    downloadEnabled: Boolean
 ) {
     val cs = MaterialTheme.colorScheme
     Box(
         Modifier
             .fillMaxWidth()
-            .height(520.dp)
+            .height(470.dp)
             .background(cs.surfaceVariant) // placeholder under the backdrop
     ) {
         val backdrop = vm.backdropUrl(series, maxWidth = 1280)
@@ -424,6 +401,19 @@ private fun SeriesHero(
                     )
                 )
         )
+        Surface(
+            shape = CircleShape,
+            color = Color.Black.copy(alpha = 0.42f),
+            contentColor = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = 14.dp)
+                .size(44.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+        }
         Column(
             Modifier
                 .align(Alignment.BottomStart)
@@ -495,14 +485,14 @@ private fun SeriesHero(
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
-                    HeroActionChip {
+                    HeroActionChip(
+                        enabled = downloadEnabled,
+                        onClick = onDownloadAllClick
+                    ) {
                         Icon(
                             com.example.jellyfinplayer.ui.icons.DownloadIconVector,
                             contentDescription = "Download"
                         )
-                    }
-                    HeroActionChip {
-                        Icon(Icons.Default.Check, contentDescription = "Watched")
                     }
                 }
             }
@@ -511,14 +501,24 @@ private fun SeriesHero(
 }
 
 @Composable
-private fun HeroActionChip(content: @Composable BoxScope.() -> Unit) {
+private fun HeroActionChip(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
     Surface(
         shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.42f),
-        contentColor = Color.White,
+        color = Color.Black.copy(alpha = if (enabled) 0.42f else 0.22f),
+        contentColor = Color.White.copy(alpha = if (enabled) 1f else 0.48f),
         modifier = Modifier.size(52.dp)
     ) {
-        Box(contentAlignment = Alignment.Center, content = content)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(enabled = enabled, onClick = onClick),
+            contentAlignment = Alignment.Center,
+            content = content
+        )
     }
 }
 
@@ -584,7 +584,15 @@ private fun SeasonTabs(
         Spacer(Modifier.height(8.dp))
         return
     }
+    val rowState = rememberLazyListState()
+    LaunchedEffect(seasons, selected) {
+        val selectedIndex = seasons.indexOf(selected)
+        if (selectedIndex >= 0) {
+            rowState.scrollToItem(selectedIndex)
+        }
+    }
     LazyRow(
+        state = rowState,
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier
