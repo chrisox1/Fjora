@@ -1,5 +1,8 @@
 # Fjora: A Third-Party Jellyfin Player
 
+Google Play Test invite link:
+https://play.google.com/apps/internaltest/4700937587723555877
+
 <img width="1024" height="1024" alt="fjora-logo" src="https://github.com/user-attachments/assets/a0a500ce-8858-4bfd-a29c-99dc5b5cea86" />
 
 
@@ -65,7 +68,7 @@ Screenshots:
 
 ## Upcoming work
 
-- Chromecast and google play store application.
+- Chromecast.
 - Additional tablet and TV layout polish.
 
 ## Android requirements
