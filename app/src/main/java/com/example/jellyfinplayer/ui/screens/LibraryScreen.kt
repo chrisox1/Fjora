@@ -1581,16 +1581,16 @@ private fun FeaturedBanner(
     val isTabletLandscape = isLandscape && configuration.screenHeightDp >= 600
     val visibleBannerWidth = configuration.screenWidthDp.dp
     val landscapeHeroHeight = if (isTabletLandscape) {
-        (configuration.screenHeightDp.dp * 0.42f).coerceIn(300.dp, 440.dp)
+        (configuration.screenHeightDp.dp * 0.38f).coerceIn(280.dp, 400.dp)
     } else {
-        (configuration.screenHeightDp.dp * 0.40f).coerceIn(170.dp, 230.dp)
+        (configuration.screenHeightDp.dp * 0.36f).coerceIn(150.dp, 205.dp)
     }
     val heroSizeModifier = if (isLandscape) {
         Modifier.height(landscapeHeroHeight)
     } else {
         Modifier
-            .heightIn(min = 370.dp)
-            .aspectRatio(9f / 10.3f)
+            .heightIn(min = 340.dp)
+            .aspectRatio(9f / 9.6f)
     }
     val subtitle = remember(item) { featuredSubtitle(item) }
     val meta = remember(item) { featuredMeta(item) }
