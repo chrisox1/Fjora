@@ -658,7 +658,7 @@ fun LibraryScreen(
             thickTopBarVisible -> topBarSafeTop + 64.dp
             else -> 0.dp
         },
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = tween(durationMillis = 150),
         label = "library_top_bar_height"
     )
     val showHomeOverlayControls = !isSearchMode &&
@@ -700,8 +700,8 @@ fun LibraryScreen(
             ) {
                 AnimatedVisibility(
                     visible = animatedTopBarHeight > 1.dp,
-                    enter = fadeIn(animationSpec = tween(140)),
-                    exit = fadeOut(animationSpec = tween(110))
+                    enter = fadeIn(animationSpec = tween(100)),
+                    exit = fadeOut(animationSpec = tween(80))
                 ) {
                     when {
                         isSearchMode -> {
@@ -805,8 +805,8 @@ fun LibraryScreen(
                         selectedLibraryId = selectedLibraryId
                     ),
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(240)) togetherWith
-                            fadeOut(animationSpec = tween(160))
+                        fadeIn(animationSpec = tween(170)) togetherWith
+                            fadeOut(animationSpec = tween(110))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -1192,8 +1192,8 @@ fun LibraryScreen(
             }
             AnimatedVisibility(
                 visible = showHomeOverlayControls,
-                enter = fadeIn(animationSpec = tween(140)),
-                exit = fadeOut(animationSpec = tween(110)),
+                enter = fadeIn(animationSpec = tween(100)),
+                exit = fadeOut(animationSpec = tween(80)),
                 modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 HomeOverlayControls(
@@ -1540,18 +1540,20 @@ private fun FeaturedBanner(
 ) {
     val cs = MaterialTheme.colorScheme
     val context = LocalContext.current
+    val heroBackdropWidth = 3840
+    val heroPosterHeight = 2160
     val ownBackdrop = if (item.backdropImageTags.isNotEmpty()) {
-        vm.backdropUrl(item, maxWidth = 1280)
+        vm.backdropUrl(item, maxWidth = heroBackdropWidth)
     } else {
         null
     }
     val backdropArtwork = when (item.type) {
-        "Episode" -> vm.parentBackdropUrl(item, maxWidth = 1280) ?: ownBackdrop
+        "Episode" -> vm.parentBackdropUrl(item, maxWidth = heroBackdropWidth) ?: ownBackdrop
         else -> ownBackdrop
     }
     val posterArtwork = when (item.type) {
-        "Episode" -> vm.seriesPosterUrl(item, maxHeight = 900)
-        else -> vm.posterUrl(item, maxHeight = 900)
+        "Episode" -> vm.seriesPosterUrl(item, maxHeight = heroPosterHeight)
+        else -> vm.posterUrl(item, maxHeight = heroPosterHeight)
     }
     val artwork = backdropArtwork ?: posterArtwork
     val progress = item.playedFraction ?: 0f
@@ -1561,7 +1563,16 @@ private fun FeaturedBanner(
     } else {
         item.name
     }
-    val visibleBannerWidth = LocalConfiguration.current.screenWidthDp.dp
+    val configuration = LocalConfiguration.current
+    val visibleBannerWidth = configuration.screenWidthDp.dp
+    val landscapeHeroHeight = (configuration.screenHeightDp.dp * 0.46f).coerceIn(190.dp, 280.dp)
+    val heroSizeModifier = if (configuration.screenWidthDp > configuration.screenHeightDp) {
+        Modifier.height(landscapeHeroHeight)
+    } else {
+        Modifier
+            .heightIn(min = 370.dp)
+            .aspectRatio(9f / 10.3f)
+    }
     val subtitle = remember(item) { featuredSubtitle(item) }
     val meta = remember(item) { featuredMeta(item) }
 
@@ -1569,8 +1580,7 @@ private fun FeaturedBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 18.dp)
-            .heightIn(min = 370.dp)
-            .aspectRatio(9f / 10.3f)
+            .then(heroSizeModifier)
             .background(cs.surfaceVariant)
             .clickable(onClick = onClick)
     ) {
@@ -1580,9 +1590,9 @@ private fun FeaturedBanner(
                     .data(artwork)
                     .apply {
                         if (backdropArtwork != null) {
-                            size(1280, 720)
+                            size(heroBackdropWidth, 2160)
                         } else {
-                            size(900, 1350)
+                            size(1440, heroPosterHeight)
                         }
                     }
                     .crossfade(false)
