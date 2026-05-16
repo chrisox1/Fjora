@@ -1437,7 +1437,16 @@ private fun FeaturedCarousel(
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
     var lastTouchAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val screenWidth = configuration.screenWidthDp.dp
+    val carouselModifier = if (isLandscape) {
+        Modifier.fillMaxWidth()
+    } else {
+        Modifier
+            .requiredWidth(screenWidth + 40.dp)
+            .offset(x = (-16).dp)
+    }
 
     LaunchedEffect(items.size) {
         while (items.size > 1) {
@@ -1452,9 +1461,7 @@ private fun FeaturedCarousel(
     }
 
     Box(
-        modifier = Modifier
-            .requiredWidth(screenWidth + 40.dp)
-            .offset(x = (-16).dp)
+        modifier = carouselModifier
             .pointerInput(items.size) {
                 awaitPointerEventScope {
                     while (true) {
@@ -1564,9 +1571,15 @@ private fun FeaturedBanner(
         item.name
     }
     val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val isTabletLandscape = isLandscape && configuration.screenHeightDp >= 600
     val visibleBannerWidth = configuration.screenWidthDp.dp
-    val landscapeHeroHeight = (configuration.screenHeightDp.dp * 0.46f).coerceIn(190.dp, 280.dp)
-    val heroSizeModifier = if (configuration.screenWidthDp > configuration.screenHeightDp) {
+    val landscapeHeroHeight = if (isTabletLandscape) {
+        (configuration.screenHeightDp.dp * 0.42f).coerceIn(300.dp, 440.dp)
+    } else {
+        (configuration.screenHeightDp.dp * 0.40f).coerceIn(170.dp, 230.dp)
+    }
+    val heroSizeModifier = if (isLandscape) {
         Modifier.height(landscapeHeroHeight)
     } else {
         Modifier
@@ -1641,12 +1654,23 @@ private fun FeaturedBanner(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .width(visibleBannerWidth)
-                .padding(horizontal = 22.dp, vertical = 26.dp),
+                .padding(
+                    horizontal = if (isLandscape) 28.dp else 22.dp,
+                    vertical = when {
+                        !isLandscape -> 26.dp
+                        isTabletLandscape -> 22.dp
+                        else -> 14.dp
+                    }
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 label.uppercase(),
-                style = MaterialTheme.typography.labelLarge,
+                style = if (isLandscape && !isTabletLandscape) {
+                    MaterialTheme.typography.labelMedium
+                } else {
+                    MaterialTheme.typography.labelLarge
+                },
                 color = Color.White.copy(alpha = 0.76f),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -1655,15 +1679,19 @@ private fun FeaturedBanner(
             )
             Text(
                 title,
-                style = MaterialTheme.typography.displayMedium,
+                style = when {
+                    isLandscape && !isTabletLandscape -> MaterialTheme.typography.headlineMedium
+                    isLandscape -> MaterialTheme.typography.displaySmall
+                    else -> MaterialTheme.typography.displayMedium
+                },
                 color = Color.White,
                 fontWeight = FontWeight.Black,
-                maxLines = 2,
+                maxLines = if (isLandscape) 1 else 2,
                 textAlign = TextAlign.Center,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp)
+                    .padding(top = if (isLandscape) 6.dp else 10.dp)
             )
             if (meta.isNotBlank()) {
                 Text(
@@ -1675,7 +1703,7 @@ private fun FeaturedBanner(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
+                        .padding(top = if (isLandscape) 4.dp else 8.dp)
                 )
             }
             Button(
@@ -1685,11 +1713,16 @@ private fun FeaturedBanner(
                     containerColor = cs.primary,
                     contentColor = cs.onPrimary
                 ),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                modifier = Modifier.padding(top = 18.dp)
+                contentPadding = PaddingValues(
+                    horizontal = if (isLandscape) 22.dp else 20.dp,
+                    vertical = if (isLandscape) 9.dp else 12.dp
+                ),
+                modifier = Modifier
+                    .padding(top = if (isLandscape) 8.dp else 18.dp)
+                    .widthIn(min = if (isLandscape) 210.dp else 0.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                if (progress > 0f && progress < 0.99f) {
+                if (!isLandscape && progress > 0f && progress < 0.99f) {
                     Spacer(Modifier.width(10.dp))
                     Box(
                         Modifier
@@ -1708,16 +1741,20 @@ private fun FeaturedBanner(
                     }
                 }
                 Spacer(Modifier.width(10.dp))
+                val buttonLabel = when {
+                    remainingMinutes != null -> "$remainingMinutes min left"
+                    progress > 0f && progress < 0.99f -> "Resume"
+                    else -> "Play"
+                }
                 Text(
-                    when {
-                        remainingMinutes != null -> "$remainingMinutes min left"
-                        progress > 0f && progress < 0.99f -> "Resume"
-                        else -> "Play"
-                    },
-                    fontWeight = FontWeight.Bold
+                    buttonLabel,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            if (subtitle.isNotBlank()) {
+            if (subtitle.isNotBlank() && (!isLandscape || isTabletLandscape)) {
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodyMedium,
@@ -2355,52 +2392,148 @@ private fun FjoraBottomNavigation(
     onDownloadsClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val isTabletLandscape = isLandscape && configuration.screenHeightDp >= 600
     Surface(
         color = cs.background.copy(alpha = 0.94f),
         tonalElevation = 0.dp,
         shadowElevation = 10.dp
     ) {
-        NavigationBar(
-            containerColor = Color.Transparent,
-            tonalElevation = 0.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 88.dp)
-        ) {
-            NavigationBarItem(
-                selected = selected == BottomDestination.HOME,
-                onClick = onHomeClick,
-                icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                label = { BottomNavLabel("Home") },
-                colors = fjoraBottomNavigationItemColors()
-            )
-            NavigationBarItem(
-                selected = selected == BottomDestination.LIBRARIES,
-                onClick = onLibrariesClick,
-                icon = { Icon(Icons.Default.Movie, contentDescription = null) },
-                label = { BottomNavLabel("Libraries") },
-                colors = fjoraBottomNavigationItemColors()
-            )
-            NavigationBarItem(
-                selected = false,
-                onClick = onSearchClick,
-                icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                label = { BottomNavLabel("Search") },
-                colors = fjoraBottomNavigationItemColors()
-            )
-            NavigationBarItem(
-                selected = selected == BottomDestination.DOWNLOADS,
-                onClick = onDownloadsClick,
-                icon = {
-                    Icon(
-                        com.example.jellyfinplayer.ui.icons.DownloadIconVector,
-                        contentDescription = null
-                    )
-                },
-                label = { BottomNavLabel("Downloads") },
-                colors = fjoraBottomNavigationItemColors()
-            )
+        if (isLandscape) {
+            val navHeight = if (isTabletLandscape) 72.dp else 58.dp
+            val horizontalPadding = if (isTabletLandscape) 180.dp else 72.dp
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(navHeight)
+                    .navigationBarsPadding()
+                    .padding(horizontal = horizontalPadding),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactBottomNavItem(
+                    selected = selected == BottomDestination.HOME,
+                    onClick = onHomeClick,
+                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    label = "Home",
+                    tablet = isTabletLandscape
+                )
+                CompactBottomNavItem(
+                    selected = selected == BottomDestination.LIBRARIES,
+                    onClick = onLibrariesClick,
+                    icon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                    label = "Libraries",
+                    tablet = isTabletLandscape
+                )
+                CompactBottomNavItem(
+                    selected = false,
+                    onClick = onSearchClick,
+                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    label = "Search",
+                    tablet = isTabletLandscape
+                )
+                CompactBottomNavItem(
+                    selected = selected == BottomDestination.DOWNLOADS,
+                    onClick = onDownloadsClick,
+                    icon = {
+                        Icon(
+                            com.example.jellyfinplayer.ui.icons.DownloadIconVector,
+                            contentDescription = null
+                        )
+                    },
+                    label = "Downloads",
+                    tablet = isTabletLandscape
+                )
+            }
+        } else {
+            NavigationBar(
+                containerColor = Color.Transparent,
+                tonalElevation = 0.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 88.dp)
+            ) {
+                NavigationBarItem(
+                    selected = selected == BottomDestination.HOME,
+                    onClick = onHomeClick,
+                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    label = { BottomNavLabel("Home") },
+                    colors = fjoraBottomNavigationItemColors()
+                )
+                NavigationBarItem(
+                    selected = selected == BottomDestination.LIBRARIES,
+                    onClick = onLibrariesClick,
+                    icon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                    label = { BottomNavLabel("Libraries") },
+                    colors = fjoraBottomNavigationItemColors()
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onSearchClick,
+                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    label = { BottomNavLabel("Search") },
+                    colors = fjoraBottomNavigationItemColors()
+                )
+                NavigationBarItem(
+                    selected = selected == BottomDestination.DOWNLOADS,
+                    onClick = onDownloadsClick,
+                    icon = {
+                        Icon(
+                            com.example.jellyfinplayer.ui.icons.DownloadIconVector,
+                            contentDescription = null
+                        )
+                    },
+                    label = { BottomNavLabel("Downloads") },
+                    colors = fjoraBottomNavigationItemColors()
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun CompactBottomNavItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+    label: String,
+    tablet: Boolean
+) {
+    val cs = MaterialTheme.colorScheme
+    val contentColor = if (selected) cs.onPrimary else cs.onSurfaceVariant
+    val indicatorColor = if (selected) cs.primary else Color.Transparent
+    Column(
+        modifier = Modifier
+            .width(if (tablet) 112.dp else 90.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = if (tablet) 5.dp else 3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .height(if (tablet) 34.dp else 28.dp)
+                .width(if (tablet) 64.dp else 52.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(indicatorColor),
+            contentAlignment = Alignment.Center
+        ) {
+            CompositionLocalProvider(LocalContentColor provides contentColor) {
+                Box(Modifier.size(if (tablet) 24.dp else 21.dp), contentAlignment = Alignment.Center) {
+                    icon()
+                }
+            }
+        }
+        Text(
+            text = label,
+            color = if (selected) cs.onBackground else cs.onSurfaceVariant,
+            style = if (tablet) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
