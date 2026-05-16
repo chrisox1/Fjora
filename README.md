@@ -1,7 +1,13 @@
 # Fjora: A Third-Party Jellyfin Player
 
-Google Play Test invite link:
-https://play.google.com/apps/internaltest/4700937587723555877
+Google Play Test instructtions:
+
+If you want to participate you need to join this google group:
+https://groups.google.com/g/fjora-alpha
+
+After you have joined that you can use this link:
+
+https://play.google.com/store/apps/details?id=com.fjora.player
 
 <img width="1024" height="1024" alt="fjora-logo" src="https://github.com/user-attachments/assets/a0a500ce-8858-4bfd-a29c-99dc5b5cea86" />
 
