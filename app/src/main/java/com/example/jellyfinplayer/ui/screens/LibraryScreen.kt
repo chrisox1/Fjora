@@ -83,6 +83,12 @@ private data class LibraryContentTarget(
     val selectedLibraryId: String?
 )
 
+private const val LIBRARY_TOP_BAR_ANIMATION_MS = 120
+private const val LIBRARY_CHROME_FADE_IN_MS = 80
+private const val LIBRARY_CHROME_FADE_OUT_MS = 60
+private const val LIBRARY_CONTENT_FADE_IN_MS = 130
+private const val LIBRARY_CONTENT_FADE_OUT_MS = 85
+
 private object LibraryNavigationSnapshot {
     var viewMode: LibraryViewMode = LibraryViewMode.HOME
     var firstVisibleItemIndex: Int = 0
@@ -658,7 +664,7 @@ fun LibraryScreen(
             thickTopBarVisible -> topBarSafeTop + 64.dp
             else -> 0.dp
         },
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = tween(durationMillis = LIBRARY_TOP_BAR_ANIMATION_MS),
         label = "library_top_bar_height"
     )
     val showHomeOverlayControls = !isSearchMode &&
@@ -700,8 +706,8 @@ fun LibraryScreen(
             ) {
                 AnimatedVisibility(
                     visible = animatedTopBarHeight > 1.dp,
-                    enter = fadeIn(animationSpec = tween(100)),
-                    exit = fadeOut(animationSpec = tween(80))
+                    enter = fadeIn(animationSpec = tween(LIBRARY_CHROME_FADE_IN_MS)),
+                    exit = fadeOut(animationSpec = tween(LIBRARY_CHROME_FADE_OUT_MS))
                 ) {
                     when {
                         isSearchMode -> {
@@ -805,8 +811,8 @@ fun LibraryScreen(
                         selectedLibraryId = selectedLibraryId
                     ),
                     transitionSpec = {
-                        fadeIn(animationSpec = tween(170)) togetherWith
-                            fadeOut(animationSpec = tween(110))
+                        fadeIn(animationSpec = tween(LIBRARY_CONTENT_FADE_IN_MS)) togetherWith
+                            fadeOut(animationSpec = tween(LIBRARY_CONTENT_FADE_OUT_MS))
                     },
                     label = "library_view_mode",
                     modifier = Modifier.fillMaxSize()
@@ -1192,8 +1198,8 @@ fun LibraryScreen(
             }
             AnimatedVisibility(
                 visible = showHomeOverlayControls,
-                enter = fadeIn(animationSpec = tween(100)),
-                exit = fadeOut(animationSpec = tween(80)),
+                enter = fadeIn(animationSpec = tween(LIBRARY_CHROME_FADE_IN_MS)),
+                exit = fadeOut(animationSpec = tween(LIBRARY_CHROME_FADE_OUT_MS)),
                 modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 HomeOverlayControls(
