@@ -64,6 +64,7 @@ import com.example.jellyfinplayer.api.MediaSegment
 import com.example.jellyfinplayer.api.MediaStream
 import com.example.jellyfinplayer.api.ResolvedStream
 import dev.jdtech.mpv.MPVLib
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -424,7 +425,7 @@ fun MpvPlayerScreen(
             return@LaunchedEffect
         }
         fileLoaded = true
-        runCatching {
+        try {
             val resumeMs = if (localFilePath == null) {
                 details?.resumePositionMs?.takeIf { it > 5_000L }
             } else null
@@ -464,14 +465,26 @@ fun MpvPlayerScreen(
                     val r = latestResolved
                     if (r != null) {
                         val subUrl = vm.subtitleUrl(item.id, r.mediaSourceId, subStream.index, "srt")
-                        subtitleCues = runCatching { loadSubtitleCues(ctx, subUrl) }
-                            .getOrDefault(emptyList())
+                        launch {
+                            subtitleCues = try {
+                                loadSubtitleCues(ctx, subUrl)
+                            } catch (t: Throwable) {
+                                if (t is CancellationException) throw t
+                                emptyList()
+                            }
+                        }
                     }
                 } else if (subStream != null && localFilePath != null) {
                     val path = subStream.deliveryUrl
                     if (!path.isNullOrBlank()) {
-                        subtitleCues = runCatching { loadLocalSubtitleCues(path) }
-                            .getOrDefault(emptyList())
+                        launch {
+                            subtitleCues = try {
+                                loadLocalSubtitleCues(path)
+                            } catch (t: Throwable) {
+                                if (t is CancellationException) throw t
+                                emptyList()
+                            }
+                        }
                     }
                 }
             }
@@ -495,11 +508,12 @@ fun MpvPlayerScreen(
             MPVLib.setPropertyBoolean("pause", false)
             delay(250)
             mpvFirstFrameReady = true
-        }.onFailure {
-            initError = "Couldn't start mpv: ${it.message}"
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            initError = "Couldn't start mpv: ${t.message}"
             com.example.jellyfinplayer.data.DiagnosticLog.record(
                 ctx,
-                "MPV start failed for ${item.name}: ${it.message ?: it::class.java.simpleName}"
+                "MPV start failed for ${item.name}: ${t.message ?: t::class.java.simpleName}"
             )
         }
     }
