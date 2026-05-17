@@ -9,6 +9,10 @@ After you have joined that you can use this link:
 
 https://play.google.com/store/apps/details?id=com.fjora.player
 
+or this:
+
+https://play.google.com/apps/testing/com.fjora.player
+
 Discord: https://discord.gg/CjajMXZs
 
 <img width="1024" height="1024" alt="fjora-logo" src="https://github.com/user-attachments/assets/a0a500ce-8858-4bfd-a29c-99dc5b5cea86" />
