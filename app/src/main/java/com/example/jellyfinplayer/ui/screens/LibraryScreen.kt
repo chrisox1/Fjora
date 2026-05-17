@@ -1754,7 +1754,7 @@ private fun FeaturedBanner(
                 }
                 Text(
                     buttonLabel,
-                    color = Color.White,
+                    color = cs.onPrimary,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
