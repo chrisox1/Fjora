@@ -125,6 +125,66 @@ fun MpvPlayerScreen(
     var resumeAfterDrag by remember { mutableStateOf(false) }
     var ignorePositionPollUntilMs by remember { mutableLongStateOf(0L) }
     var seekBarWidthPx by remember { mutableFloatStateOf(1f) }
+    var resumeAfterAudioFocusGain by remember { mutableStateOf(false) }
+    val audioFocusChangeListener = remember {
+        AudioManager.OnAudioFocusChangeListener { focusChange ->
+            when (focusChange) {
+                AudioManager.AUDIOFOCUS_LOSS,
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                    resumeAfterAudioFocusGain = isPlaying
+                    runCatching { MPVLib.setPropertyBoolean("pause", true) }
+                    isPlaying = false
+                }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                    runCatching { MPVLib.setPropertyDouble("volume", 35.0) }
+                }
+                AudioManager.AUDIOFOCUS_GAIN -> {
+                    runCatching { MPVLib.setPropertyDouble("volume", 100.0) }
+                    if (resumeAfterAudioFocusGain) {
+                        resumeAfterAudioFocusGain = false
+                        runCatching { MPVLib.setPropertyBoolean("pause", false) }
+                        isPlaying = true
+                    }
+                }
+            }
+        }
+    }
+    val audioFocusRequest = remember(audioFocusChangeListener) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+        } else {
+            null
+        }
+    }
+    fun requestMpvAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager?.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+    }
+    fun abandonMpvAudioFocus() {
+        resumeAfterAudioFocusGain = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager?.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
     // True once loadfile has been issued. Prevents re-issuing loadfile when
     // the SurfaceView surface is destroyed and recreated (e.g. going home and
     // returning, or the system briefly reclaiming the surface in PiP).
@@ -513,6 +573,7 @@ fun MpvPlayerScreen(
             }
             // Unpause only after the seek — this prevents the brief 0→resumeMs
             // play-from-beginning that was visible before.
+            requestMpvAudioFocus()
             MPVLib.setPropertyBoolean("pause", false)
             if (localFilePath != null) {
                 mpvFirstFrameReady = true
@@ -592,6 +653,7 @@ fun MpvPlayerScreen(
         pip.activeTogglePlayPause = {
             runCatching {
                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
+                if (paused) requestMpvAudioFocus() else abandonMpvAudioFocus()
                 MPVLib.setPropertyBoolean("pause", !paused)
                 isPlaying = paused
             }
@@ -612,6 +674,7 @@ fun MpvPlayerScreen(
         }
         pip.activeStop = {
             runCatching { MPVLib.setPropertyBoolean("pause", true) }
+            abandonMpvAudioFocus()
         }
         pip.activeRefreshPip = {
             if (inPip && activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -970,6 +1033,7 @@ fun MpvPlayerScreen(
                         ) {
                             runCatching {
                                 val paused = MPVLib.getPropertyBoolean("pause") ?: false
+                                if (paused) requestMpvAudioFocus() else abandonMpvAudioFocus()
                                 MPVLib.setPropertyBoolean("pause", !paused)
                                 isPlaying = paused
                             }
@@ -1298,6 +1362,7 @@ fun MpvPlayerScreen(
                 onClick = {
                     if (!endedHandled) {
                         endedHandled = true
+                        abandonMpvAudioFocus()
                         isNavigatingAway = true
                         creditsPlayNext(creditsNext)
                     }
@@ -1400,6 +1465,12 @@ fun MpvPlayerScreen(
                 },
                 onDismiss = { showSpeedMenu = false }
             )
+        }
+    }
+
+    DisposableEffect(audioManager, audioFocusRequest) {
+        onDispose {
+            abandonMpvAudioFocus()
         }
     }
 }
