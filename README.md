@@ -9,6 +9,8 @@ After you have joined that you can use this link:
 
 https://play.google.com/store/apps/details?id=com.fjora.player
 
+Discord: https://discord.gg/CjajMXZs
+
 <img width="1024" height="1024" alt="fjora-logo" src="https://github.com/user-attachments/assets/a0a500ce-8858-4bfd-a29c-99dc5b5cea86" />
 
 
@@ -18,11 +20,11 @@ It uses Exoplayer by default, but includes option to use the MPV player for dire
 Fjora is a third-party Jellyfin player. It is not affiliated with, endorsed
 by, or sponsored by the Jellyfin project.
 
-Current release: `v0.1.1 beta`
+Current release: `v0.1.2 beta`
 
 ## Status
 
-Fjora is an early beta project currently tested primarily on a Google Pixel 8a.
+Fjora is an early beta project and not a fork.
 
 While already working well in daily use, some features may still have bugs or rough edges. Feedback, bug reports, and contributions are very welcome.
 
