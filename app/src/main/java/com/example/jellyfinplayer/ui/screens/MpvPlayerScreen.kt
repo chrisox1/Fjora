@@ -464,16 +464,14 @@ fun MpvPlayerScreen(
                     val r = latestResolved
                     if (r != null) {
                         val subUrl = vm.subtitleUrl(item.id, r.mediaSourceId, subStream.index, "srt")
-                        subScope.launch {
-                            subtitleCues = loadSubtitleCues(ctx, subUrl)
-                        }
+                        subtitleCues = runCatching { loadSubtitleCues(ctx, subUrl) }
+                            .getOrDefault(emptyList())
                     }
                 } else if (subStream != null && localFilePath != null) {
                     val path = subStream.deliveryUrl
                     if (!path.isNullOrBlank()) {
-                        subScope.launch {
-                            subtitleCues = loadLocalSubtitleCues(path)
-                        }
+                        subtitleCues = runCatching { loadLocalSubtitleCues(path) }
+                            .getOrDefault(emptyList())
                     }
                 }
             }
