@@ -1,6 +1,6 @@
 # Fjora: A Third-Party Jellyfin Player
 
-Google Play Test instructtions:
+Google Play Test instructions:
 
 If you want to participate you need to join this google group:
 https://groups.google.com/g/fjora-alpha
