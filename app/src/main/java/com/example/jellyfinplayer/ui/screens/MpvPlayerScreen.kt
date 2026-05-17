@@ -263,6 +263,14 @@ fun MpvPlayerScreen(
         }
     }
 
+    LaunchedEffect(chromeVisible, inPip) {
+        if (!inPip) {
+            val window = activity?.window ?: return@LaunchedEffect
+            WindowCompat.getInsetsController(window, view)
+                .hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     LaunchedEffect(
         item.id,
         localFilePath,
@@ -508,6 +516,13 @@ fun MpvPlayerScreen(
             MPVLib.setPropertyBoolean("pause", false)
             delay(250)
             mpvFirstFrameReady = true
+            if (localFilePath != null) {
+                mpvHasPlaybackSignal = true
+                lastPollWallMs = System.currentTimeMillis()
+                if (durationMs <= 0L) {
+                    durationMs = details?.durationMsFallback() ?: item.durationMsFallback() ?: 0L
+                }
+            }
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             initError = "Couldn't start mpv: ${t.message}"
@@ -905,7 +920,7 @@ fun MpvPlayerScreen(
         // ── Center transport controls ─────────────────────────────────────────
         // Hidden during the loading phase (before first frame ready or while
         // buffering) so the user only sees the spinner — no stale Pause icon.
-        val mpvLoading = !mpvFirstFrameReady || mpvBuffering
+        val mpvLoading = !mpvFirstFrameReady || mpvBuffering || mpvManualSeeking
         AnimatedVisibility(
             visible = chromeVisible && !controlsLocked && !mpvLoading && !inPip,
             enter = fadeIn(),
@@ -1151,7 +1166,7 @@ fun MpvPlayerScreen(
         // network cache (seeking stall) or when the file is loading
         // (fileLoaded=true but duration not yet reported).
         val showMpvSpinner = mpvBuffering || mpvManualSeeking ||
-            (sourceUrl != null && (!mpvFirstFrameReady || !mpvHasPlaybackSignal))
+            (sourceUrl != null && !mpvFirstFrameReady)
         if (showMpvSpinner) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),
