@@ -514,14 +514,16 @@ fun MpvPlayerScreen(
             // Unpause only after the seek — this prevents the brief 0→resumeMs
             // play-from-beginning that was visible before.
             MPVLib.setPropertyBoolean("pause", false)
-            delay(250)
-            mpvFirstFrameReady = true
             if (localFilePath != null) {
+                mpvFirstFrameReady = true
                 mpvHasPlaybackSignal = true
                 lastPollWallMs = System.currentTimeMillis()
                 if (durationMs <= 0L) {
                     durationMs = details?.durationMsFallback() ?: item.durationMsFallback() ?: 0L
                 }
+            } else {
+                delay(250)
+                mpvFirstFrameReady = true
             }
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
@@ -920,7 +922,11 @@ fun MpvPlayerScreen(
         // ── Center transport controls ─────────────────────────────────────────
         // Hidden during the loading phase (before first frame ready or while
         // buffering) so the user only sees the spinner — no stale Pause icon.
-        val mpvLoading = !mpvFirstFrameReady || mpvBuffering || mpvManualSeeking
+        val localPlaybackReady = localFilePath != null && fileLoaded
+        val effectiveMpvBuffering = mpvBuffering && localFilePath == null
+        val mpvLoading = (!mpvFirstFrameReady && !localPlaybackReady) ||
+            effectiveMpvBuffering ||
+            mpvManualSeeking
         AnimatedVisibility(
             visible = chromeVisible && !controlsLocked && !mpvLoading && !inPip,
             enter = fadeIn(),
@@ -1165,8 +1171,9 @@ fun MpvPlayerScreen(
         // Buffering spinner — shown when MPV is paused waiting for the
         // network cache (seeking stall) or when the file is loading
         // (fileLoaded=true but duration not yet reported).
-        val showMpvSpinner = mpvBuffering || mpvManualSeeking ||
-            (sourceUrl != null && !mpvFirstFrameReady)
+        val showMpvSpinner = effectiveMpvBuffering ||
+            mpvManualSeeking ||
+            (sourceUrl != null && !mpvFirstFrameReady && !localPlaybackReady)
         if (showMpvSpinner) {
             CircularProgressIndicator(
                 color = Color.White.copy(alpha = 0.85f),
